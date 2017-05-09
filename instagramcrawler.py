@@ -6,6 +6,7 @@ from collections import defaultdict
 import os
 import re
 import sys
+from sys import platform
 import time
 try:
 	from urlparse import urljoin
@@ -44,6 +45,9 @@ FOLLOWING_PATH = "//div[contains(text(), 'Following')]"
 SCROLL_UP = "window.scrollTo(0, 0);"
 SCROLL_DOWN = "window.scrollTo(0, document.body.scrollHeight);"
 
+#path for the scraper profile
+CHROME_PROFILE_PATH = ".\Scraper"
+
 # For Caption Scraping
 class url_change(object):
 	def __init__(self, prev_url):
@@ -55,14 +59,15 @@ class url_change(object):
 # Crawler Class
 class InstagramCrawler(object):
 	def __init__(self):
-		#self._driver = webdriver.Firefox()
+		options = webdriver.ChromeOptions()
+		options.add_argument("user-data-dir=" + CHROME_PROFILE_PATH)
+
 		if platform == "win32":
-			self._driver = webdriver.Chrome("./chromedriverWIN.exe")
+			self._driver = webdriver.Chrome(executable_path = "./chromedriverWIN.exe", chrome_options = options)
 		elif platform == "darwin":
-			self._driver = webdriver.Chrome("./chromedriverMAC")
+			self._driver = webdriver.Chrome(executable_path = "./chromedriverMAC", chrome_options=options)
 		else:
 			print("neither Windows nor Mac detected")
-
 		self.data = defaultdict(list)
 
 	def login(self):
@@ -92,8 +97,7 @@ class InstagramCrawler(object):
 
 		elif crawl_type in ["followers", "following"]:
 			# Need to login first before crawling followers/following
-			print("You will need to login to crawl {}".format(crawl_type))
-			self.login()
+			print("You need to be logged in to crawl {}".format(crawl_type))
 			# Then browse target page
 			assert not query.startswith(
 				'#'), "Hashtag does not have followers/following!"
@@ -129,11 +133,21 @@ class InstagramCrawler(object):
 		number = number if number < num_of_posts else num_of_posts
 
 		# scroll page until reached
-		loadmore = WebDriverWait(self._driver, 10).until(
+		try:
+			loadmore = WebDriverWait(self._driver, 5).until(
 			EC.presence_of_element_located(
 				(By.CSS_SELECTOR, CSS_LOAD_MORE))
-		)
-		loadmore.click()
+			)
+			loadmore.click()
+		except:
+			# close emailsignup banner covering load more button
+			try:
+				WebDriverWait(self._driver, 3).until(EC.presence_of_element_located((By
+				.CLASS_NAME, "_8yoiv"))).click()
+				time.sleep(0.1)
+			except:
+				print("no email signup banner found, continuing...")
+			loadmore.click()
 
 		num_to_scroll = int((number - 12) / 12) + 1
 		for _ in range(num_to_scroll):
