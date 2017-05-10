@@ -61,7 +61,6 @@ class InstagramCrawler(object):
 	def __init__(self):
 		options = webdriver.ChromeOptions()
 		options.add_argument("user-data-dir=" + CHROME_PROFILE_PATH)
-		options.add_argument("--headless")
 
 		if platform == "win32":
 			self._driver = webdriver.Chrome(executable_path = "./chromedriverWIN.exe", chrome_options = options)
@@ -240,27 +239,39 @@ class InstagramCrawler(object):
 		num_of_shown_follow = len(List.find_elements_by_xpath('*'))
 		action = webdriver.ActionChains(self._driver)
 		lastelement = List.find_elements_by_xpath('*')[-1]
-		while num_of_shown_follow  < number:
-			action.send_keys(Keys.PAGE_DOWN).perform()
-			time.sleep(0.1)
-			newlastelement = List.find_elements_by_xpath('*')[-1]
-			#end of the list?
-			if(lastelement == newlastelement):
-				time.sleep(0.3) #wait a little
+		follow_items = []
+		try:
+			while num_of_shown_follow  < number:
+				action.send_keys(Keys.PAGE_DOWN).perform()
+				time.sleep(0.5)
 				newlastelement = List.find_elements_by_xpath('*')[-1]
-				#really end of the list?
+				#end of the list?
 				if(lastelement == newlastelement):
-					time.sleep(2) #wait a little
+					action.send_keys(Keys.PAGE_DOWN).perform()
+					time.sleep(1) #wait a little
 					newlastelement = List.find_elements_by_xpath('*')[-1]
 					#really end of the list?
 					if(lastelement == newlastelement):
-						break #stop scrolling
-			lastelement = newlastelement
-			num_of_shown_follow = len(List.find_elements_by_xpath('*'))
-
-		follow_items = []
-		for ele in List.find_elements_by_xpath('*')[:number]:
-			follow_items.append(ele.text.split('\n')[0])
+						action.send_keys(Keys.PAGE_DOWN).perform()
+						time.sleep(3) #wait a little
+						newlastelement = List.find_elements_by_xpath('*')[-1]
+						#really end of the list?
+						if(lastelement == newlastelement):
+							action.send_keys(Keys.PAGE_DOWN).perform()
+							time.sleep(5) #wait a little
+							newlastelement = List.find_elements_by_xpath('*')[-1]
+							#really end of the list?
+							if(lastelement == newlastelement):
+								break #stop scrolling
+				lastelement = newlastelement
+				num_of_shown_follow = len(List.find_elements_by_xpath('*'))
+				diff = len(follow_items) - num_of_shown_follow
+				while diff < 0:
+					name = List.find_elements_by_xpath('*')[diff].text.split('\n')[0]
+					follow_items.append(name)
+					diff += 1
+		except Exception as e:
+			print(type(e))
 
 		self.data[crawl_type] = follow_items
 
