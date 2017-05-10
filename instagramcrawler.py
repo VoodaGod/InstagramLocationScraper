@@ -61,6 +61,7 @@ class InstagramCrawler(object):
 	def __init__(self):
 		options = webdriver.ChromeOptions()
 		options.add_argument("user-data-dir=" + CHROME_PROFILE_PATH)
+		options.add_argument("--headless")
 
 		if platform == "win32":
 			self._driver = webdriver.Chrome(executable_path = "./chromedriverWIN.exe", chrome_options = options)
@@ -237,14 +238,25 @@ class InstagramCrawler(object):
 
 		# Loop through list till target number is reached
 		num_of_shown_follow = len(List.find_elements_by_xpath('*'))
-
-		while len(List.find_elements_by_xpath('*')) < number:
-			element = List.find_elements_by_xpath('*')[-1]
-			# Work around for now => should use selenium's Expected Conditions!
-			try:
-				element.send_keys(Keys.PAGE_DOWN)
-			except Exception as e:
-				time.sleep(0.1)
+		action = webdriver.ActionChains(self._driver)
+		lastelement = List.find_elements_by_xpath('*')[-1]
+		while num_of_shown_follow  < number:
+			action.send_keys(Keys.PAGE_DOWN).perform()
+			time.sleep(0.1)
+			newlastelement = List.find_elements_by_xpath('*')[-1]
+			#end of the list?
+			if(lastelement == newlastelement):
+				time.sleep(0.3) #wait a little
+				newlastelement = List.find_elements_by_xpath('*')[-1]
+				#really end of the list?
+				if(lastelement == newlastelement):
+					time.sleep(2) #wait a little
+					newlastelement = List.find_elements_by_xpath('*')[-1]
+					#really end of the list?
+					if(lastelement == newlastelement):
+						break #stop scrolling
+			lastelement = newlastelement
+			num_of_shown_follow = len(List.find_elements_by_xpath('*'))
 
 		follow_items = []
 		for ele in List.find_elements_by_xpath('*')[:number]:
@@ -301,7 +313,7 @@ def main():
 						help="target to crawl, add '#' for hashtags")
 	parser.add_argument('-t', '--crawl_type', type=str,
 						default='photos', help="Options: 'photos' | 'followers' | 'following'")
-	parser.add_argument('-n', '--number', type=int, default=12,
+	parser.add_argument('-n', '--number', type=int, default=sys.maxsize,
 						help='Number of posts to download: integer or "all"')
 	parser.add_argument('-c', '--caption', action='store_true',
 						help='Add this flag to download caption when downloading photos')
