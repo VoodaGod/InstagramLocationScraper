@@ -22,6 +22,11 @@ RELATIVE_URL_LOCATION = "/explore/locations/"
 # SELENIUM CSS SELECTOR
 CSS_LOAD_MORE = "a._8imhp._glz1g"
 CSS_RIGHT_ARROW = "a[class='_de018 coreSpriteRightPaginationArrow']"
+CSS_DATE = "a time"
+
+# CLASS NAMES
+CLOSE_BUTTON = "_3eajp"
+POST = "_ovg3g"
 
 # JAVASCRIPT COMMANDS
 SCROLL_UP = "window.scrollTo(0, 0);"
@@ -45,12 +50,13 @@ class LocationScraper(object):
 	def quit(self):
 		self.driver.quit()
 
-	def scrape(self, dirPrefix, location, dateFrom, dateTill):
-		print("dirPrefix: " + dirPrefix + ", location: " + location + ", dateFrom: " + dateFrom + ", dateTill: " + dateTill)
+	def scrape(self, dirPrefix, location, dateTo, dateFrom):
 		self.browseTargetPage(location)
 		self.scrollToDate(dateFrom)
-
-		#TODO
+		postList = self.driver.find_elements_by_class_name(POST)
+		firstPostIndex = self.findFirstPost(dateFrom, postList)
+		lastPostIndex = self.findLastPost(dateTo, postList)
+		print("pics posted: " + str(firstPostIndex - lastPostIndex))
 
 		print("enter to exit")
 		input()
@@ -62,43 +68,62 @@ class LocationScraper(object):
 
 	#scrolls until an imager older than dateFrom is found
 	def scrollToDate(self, dateFrom):
-		if (dateFrom == "now - 1h"):
-			dateFrom = datetime.utcnow()
-			delta = timedelta(hours=10)
-			dateFrom -= delta
-		else:
-			dateFrom = dateutil.parser.parse(dateFrom, ignoretz=True)
-
 		self.driver.execute_script(SCROLL_DOWN)
 		loadmore = WebDriverWait(self.driver, 5).until(EC.presence_of_element_located((By.CSS_SELECTOR, CSS_LOAD_MORE)))
 		loadmore.click()
 		scrollMore = True
 		while(True):
-			postList = self.driver.find_elements_by_class_name("_ovg3g")
+			postList = self.driver.find_elements_by_class_name(POST)
 			postList[-1].click()
-			dateElement = WebDriverWait(self.driver, 5).until(EC.presence_of_element_located((By.CSS_SELECTOR, "a time")))
+			dateElement = WebDriverWait(self.driver, 5).until(EC.presence_of_element_located((By.CSS_SELECTOR, CSS_DATE)))
 			date = dateutil.parser.parse(dateElement.get_attribute("datetime"), ignoretz=True)
 			#print(date, dateFrom)
+			self.driver.find_element_by_class_name(CLOSE_BUTTON).click()
 			if(date <= dateFrom):
 				break
-			self.driver.find_element_by_class_name("_3eajp").click()
 			self.driver.execute_script(SCROLL_DOWN)
 
+	def findFirstPost(self, dateFrom, postList):
+		for i in range(1, len(postList)): #start looking from the back
+			postList[-i].click()
+			dateElement = WebDriverWait(self.driver, 5).until(EC.presence_of_element_located((By.CSS_SELECTOR, CSS_DATE)))
+			date = dateutil.parser.parse(dateElement.get_attribute("datetime"), ignoretz=True)
+			self.driver.find_element_by_class_name(CLOSE_BUTTON).click()
+			if (date >= dateFrom):
+				return len(postList) - i
+
+	def findLastPost(self, dateTo, postList):
+		for i in range(9, len(postList)): #first 9 posts are "Top Posts"
+			postList[i].click()
+			dateElement = WebDriverWait(self.driver, 5).until(EC.presence_of_element_located((By.CSS_SELECTOR, CSS_DATE)))
+			date = dateutil.parser.parse(dateElement.get_attribute("datetime"), ignoretz=True)
+			self.driver.find_element_by_class_name(CLOSE_BUTTON).click()
+			if (date <= dateTo):
+				return i
 
 
 
 def main():
 	#   Arguments  #
 	parser = argparse.ArgumentParser(description="Instagram Location Scraper")
-	parser.add_argument("-df", "--dateFrom", type=str, default="now - 1h", help="Date from which to scrape")
-	parser.add_argument("-dt", "--dateTill", type=str, default="now", help="Date up till which to scrape")
+	#parser.add_argument("-df", "--dateFrom", type=str, default="now - 1h", help="Date from which to scrape")
+	parser.add_argument("-d", "--date", type=str, default="now", help="Date up till which to scrape")
 	parser.add_argument("-l", "--location", type=str, default="214335386", help="Location Number eg. 214335386 for Englischer Garten")
 	parser.add_argument("-dir", "--dirPrefix", type=str, default="./data/", help="directory to save results")
+	parser.add_argument("-t", "--timeWindow", type=float, default=1.0, help="Timeframe to check number of posts")
 
 	args = parser.parse_args()
 	#  End Argparse #
 
+	if (args.date == "now"):
+		dateTo = datetime.utcnow()
+	else:
+		dateTo = dateutil.parser.parse(dateTo, ignoretz=True)
+	dateFrom = dateTo - timedelta(hours=args.timeWindow)
+
+	print("Scraping location " + args.location + " for number of pictures posted between " + str(dateFrom) + " and " + str(dateTo))
+
 	scraper = LocationScraper()
-	scraper.scrape(dirPrefix=args.dirPrefix, location=args.location, dateFrom=args.dateFrom, dateTill=args.dateTill)
+	scraper.scrape(dirPrefix=args.dirPrefix, location=args.location, dateTo=dateTo, dateFrom=dateFrom)
 
 main()
