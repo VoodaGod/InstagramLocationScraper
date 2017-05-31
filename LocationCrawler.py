@@ -1,4 +1,5 @@
 import argparse
+import sys
 from sys import platform
 import time
 import selenium
@@ -11,6 +12,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from datetime import datetime
 from datetime import timedelta
 import dateutil.parser
+import traceback
 
 
 
@@ -64,8 +66,12 @@ class LocationScraper(object):
 	#scrolls until an imager older than dateFrom is found
 	def scrollToDate(self, dateFrom):
 		self.driver.execute_script(SCROLL_DOWN)
-		loadmore = WebDriverWait(self.driver, 5).until(EC.presence_of_element_located((By.CSS_SELECTOR, CSS_LOAD_MORE)))
-		loadmore.click()
+		try:
+			loadmore = WebDriverWait(self.driver, 2).until(EC.presence_of_element_located((By.CSS_SELECTOR, CSS_LOAD_MORE)))
+		except:
+			pass
+		else:
+			loadmore.click()
 		scrollMore = True
 		while(True):
 			postList = self.driver.find_elements_by_class_name(POST)
@@ -103,7 +109,7 @@ class LocationScraper(object):
 			except:
 				break
 			self.driver.execute_script(SCROLL_DOWN)
-			time.sleep(0.5)
+			time.sleep(0.75)
 			try:
 				seeMore.click()
 			except:
@@ -111,8 +117,7 @@ class LocationScraper(object):
 		locationLinks = []
 		for element in self.driver.find_elements_by_css_selector(LOCATION_LINK):
 			locationLinks.append(element.get_attribute("href").replace(HOST + RELATIVE_URL_LOCATION, ""))
-		print(len(locationLinks))
-		print(locationLinks[0])
+		return locationLinks
 
 
 
@@ -134,20 +139,31 @@ def main():
 	if(args.date == "now"):
 		dateTo = datetime.utcnow()
 	else:
-		dateTo = dateutil.parser.parse(dateTo, ignoretz=True)
+		dateTo = dateutil.parser.parse(args.date, ignoretz=True)
 	dateFrom = dateTo - timedelta(hours=args.timeWindow)
 
 	scraper = LocationScraper()
-	
-	if(args.city != "no"):
-		locations = scraper.getLocations(args.city)
-		file = open(args.city.strip('/') + "_Locations", "w+")
-		for loc in locations:
-			file.write(loc)
-	if(args.location != "no"):
-		print("Scraping location " + args.location + " for number of pictures posted between " + str(dateFrom) + " and " + str(dateTo))
-		numPosts = scraper.scrape(dirPrefix=args.dirPrefix, location=args.location, dateTo=dateTo, dateFrom=dateFrom)
-		print(str(numPosts))
+	try:
+		if(args.city != "no"):
+			locations = scraper.getLocations(args.city)
+			path = args.dirPrefix + args.city.replace("/","_") + "Locations"
+			print(path)
+			file = open(path, "w+")
+			for loc in locations:
+				file.write(loc+ "\n")
+			file.close()
 		
+		if(args.location != "no"):
+			print("Scraping location " + args.location + " for number of pictures posted between " + str(dateFrom) + " and " + str(dateTo))
+			numPosts = scraper.scrape(dirPrefix=args.dirPrefix, location=args.location, dateTo=dateTo, dateFrom=dateFrom)
+			print(str(numPosts))
+			file = open((args.dirPrefix + dateTo.isoformat()).replace(":", "h", 1).replace(":", "m", 1), "a+")
+			file.write(args.location + "\t" + str(numPosts) + "\n")
+			file.close()
+
+	except Exception as e:
+		traceback.print_exc()
+	
+	scraper.quit()
 
 main()
