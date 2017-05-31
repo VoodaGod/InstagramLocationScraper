@@ -15,7 +15,7 @@ import dateutil.parser
 
 
 # URLS
-HOST = "http://www.instagram.com"
+HOST = "https://www.instagram.com"
 RELATIVE_URL_LOCATION = "/explore/locations/"
 
 # SELENIUM CSS SELECTOR
@@ -25,6 +25,8 @@ CSS_DATE = "a time"
 # CLASS NAMES
 CLOSE_BUTTON = "_3eajp"
 POST = "_ovg3g"
+SEE_MORE = "_jn623"
+LOCATION_LINK = "a._3hq20"
 
 # JAVASCRIPT COMMANDS
 SCROLL_UP = "window.scrollTo(0, 0);"
@@ -51,14 +53,9 @@ class LocationScraper(object):
 	def scrape(self, dirPrefix, location, dateTo, dateFrom):
 		self.browseTargetPage(location)
 		postList = self.scrollToDate(dateFrom)
-		#postList = self.driver.find_elements_by_class_name(POST)
 		firstPostIndex = self.findFirstPost(dateFrom, postList)
 		lastPostIndex = self.findLastPost(dateTo, postList)
-		print("pics posted: " + str(firstPostIndex - lastPostIndex))
-
-		print("enter to exit")
-		input()
-		self.quit()
+		return firstPostIndex - lastPostIndex
 
 	def browseTargetPage(self, location):
 		targetURL = HOST + RELATIVE_URL_LOCATION + location
@@ -75,10 +72,8 @@ class LocationScraper(object):
 			postList[-1].click()
 			dateElement = WebDriverWait(self.driver, 5).until(EC.presence_of_element_located((By.CSS_SELECTOR, CSS_DATE)))
 			date = dateutil.parser.parse(dateElement.get_attribute("datetime"), ignoretz=True)
-			#print(date, dateFrom)
 			self.driver.find_element_by_class_name(CLOSE_BUTTON).click()
 			if(date <= dateFrom):
-				#break
 				return postList
 			self.driver.execute_script(SCROLL_DOWN)
 
@@ -100,6 +95,26 @@ class LocationScraper(object):
 			if (date <= dateTo):
 				return i
 
+	def getLocations(self, city):
+		self.browseTargetPage(city)
+		while(True):
+			try:
+				seeMore = WebDriverWait(self.driver,2).until(EC.presence_of_element_located((By.CLASS_NAME, SEE_MORE)))
+			except:
+				break
+			self.driver.execute_script(SCROLL_DOWN)
+			time.sleep(0.5)
+			try:
+				seeMore.click()
+			except:
+				pass
+		locationLinks = []
+		for element in self.driver.find_elements_by_css_selector(LOCATION_LINK):
+			locationLinks.append(element.get_attribute("href").replace(HOST + RELATIVE_URL_LOCATION, ""))
+		print(len(locationLinks))
+		print(locationLinks[0])
+
+
 
 
 def main():
@@ -107,22 +122,32 @@ def main():
 	parser = argparse.ArgumentParser(description="Instagram Location Scraper")
 	#parser.add_argument("-df", "--dateFrom", type=str, default="now - 1h", help="Date from which to scrape")
 	parser.add_argument("-d", "--date", type=str, default="now", help="Date up till which to scrape")
-	parser.add_argument("-l", "--location", type=str, default="214335386", help="Location Number eg. 214335386 for Englischer Garten")
-	parser.add_argument("-dir", "--dirPrefix", type=str, default="./data/", help="directory to save results")
+	parser.add_argument("-l", "--location", type=str, default="no", help="Location Number eg. 214335386 for Englischer Garten")
 	parser.add_argument("-t", "--timeWindow", type=float, default=1.0, help="Timeframe to check number of posts")
+	parser.add_argument("-c", "--city", type=str, default="no", help="City to scrape location links from, eg c579270 for Munich")
+	parser.add_argument("-dir", "--dirPrefix", type=str, default="./data/", help="directory to save results")
+	
 
 	args = parser.parse_args()
 	#  End Argparse #
 
-	if (args.date == "now"):
+	if(args.date == "now"):
 		dateTo = datetime.utcnow()
 	else:
 		dateTo = dateutil.parser.parse(dateTo, ignoretz=True)
 	dateFrom = dateTo - timedelta(hours=args.timeWindow)
 
-	print("Scraping location " + args.location + " for number of pictures posted between " + str(dateFrom) + " and " + str(dateTo))
-
 	scraper = LocationScraper()
-	scraper.scrape(dirPrefix=args.dirPrefix, location=args.location, dateTo=dateTo, dateFrom=dateFrom)
+	
+	if(args.city != "no"):
+		locations = scraper.getLocations(args.city)
+		file = open(args.city.strip('/') + "_Locations", "w+")
+		for loc in locations:
+			file.write(loc)
+	if(args.location != "no"):
+		print("Scraping location " + args.location + " for number of pictures posted between " + str(dateFrom) + " and " + str(dateTo))
+		numPosts = scraper.scrape(dirPrefix=args.dirPrefix, location=args.location, dateTo=dateTo, dateFrom=dateFrom)
+		print(str(numPosts))
+		
 
 main()
