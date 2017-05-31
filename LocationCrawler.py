@@ -1,5 +1,4 @@
 import argparse
-import requests
 from sys import platform
 import time
 import selenium
@@ -21,7 +20,6 @@ RELATIVE_URL_LOCATION = "/explore/locations/"
 
 # SELENIUM CSS SELECTOR
 CSS_LOAD_MORE = "a._8imhp._glz1g"
-CSS_RIGHT_ARROW = "a[class='_de018 coreSpriteRightPaginationArrow']"
 CSS_DATE = "a time"
 
 # CLASS NAMES
@@ -52,8 +50,8 @@ class LocationScraper(object):
 
 	def scrape(self, dirPrefix, location, dateTo, dateFrom):
 		self.browseTargetPage(location)
-		self.scrollToDate(dateFrom)
-		postList = self.driver.find_elements_by_class_name(POST)
+		postList = self.scrollToDate(dateFrom)
+		#postList = self.driver.find_elements_by_class_name(POST)
 		firstPostIndex = self.findFirstPost(dateFrom, postList)
 		lastPostIndex = self.findLastPost(dateTo, postList)
 		print("pics posted: " + str(firstPostIndex - lastPostIndex))
@@ -80,7 +78,8 @@ class LocationScraper(object):
 			#print(date, dateFrom)
 			self.driver.find_element_by_class_name(CLOSE_BUTTON).click()
 			if(date <= dateFrom):
-				break
+				#break
+				return postList
 			self.driver.execute_script(SCROLL_DOWN)
 
 	def findFirstPost(self, dateFrom, postList):
