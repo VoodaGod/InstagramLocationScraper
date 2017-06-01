@@ -5,7 +5,6 @@ import time
 import selenium
 from selenium import webdriver
 from selenium.webdriver.common.by import By
-from selenium.webdriver.common.keys import Keys
 from selenium.common.exceptions import NoSuchElementException, TimeoutException
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
@@ -13,6 +12,7 @@ from datetime import datetime
 from datetime import timedelta
 import dateutil.parser
 import traceback
+import os
 
 
 
@@ -28,7 +28,7 @@ CSS_DATE = "a time"
 CLOSE_BUTTON = "_3eajp"
 POST = "_ovg3g"
 SEE_MORE = "_jn623"
-LOCATION_LINK = "a._3hq20"
+LOCATION_LINK = "_3hq20"
 
 # JAVASCRIPT COMMANDS
 SCROLL_UP = "window.scrollTo(0, 0);"
@@ -57,7 +57,7 @@ class LocationScraper(object):
 		postList = self.scrollToDate(dateFrom)
 		firstPostIndex = self.findFirstPost(dateFrom, postList)
 		lastPostIndex = self.findLastPost(dateTo, postList)
-		return firstPostIndex - lastPostIndex
+		return (firstPostIndex - lastPostIndex)
 
 	def browseTargetPage(self, location):
 		targetURL = HOST + RELATIVE_URL_LOCATION + location
@@ -91,6 +91,7 @@ class LocationScraper(object):
 			self.driver.find_element_by_class_name(CLOSE_BUTTON).click()
 			if (date >= dateFrom):
 				return len(postList) - i
+		return 9 #no posts since dateFrom, return first post in "most recent"
 
 	def findLastPost(self, dateTo, postList):
 		for i in range(9, len(postList)): #first 9 posts are "Top Posts"
@@ -99,7 +100,7 @@ class LocationScraper(object):
 			date = dateutil.parser.parse(dateElement.get_attribute("datetime"), ignoretz=True)
 			self.driver.find_element_by_class_name(CLOSE_BUTTON).click()
 			if (date <= dateTo):
-				return i
+				return i #return first post from before dateTo
 
 	def getLocations(self, city):
 		self.browseTargetPage(city)
@@ -115,7 +116,7 @@ class LocationScraper(object):
 			except:
 				pass
 		locationLinks = []
-		for element in self.driver.find_elements_by_css_selector(LOCATION_LINK):
+		for element in self.driver.find_elements_by_class_name(LOCATION_LINK):
 			locationLinks.append(element.get_attribute("href").replace(HOST + RELATIVE_URL_LOCATION, ""))
 		return locationLinks
 
@@ -142,23 +143,26 @@ def main():
 		dateTo = dateutil.parser.parse(args.date, ignoretz=True)
 	dateFrom = dateTo - timedelta(hours=args.timeWindow)
 
+	os.makedirs(args.dirPrefix, exist_ok=True)
+
 	scraper = LocationScraper()
 	try:
 		if(args.city != "no"):
+			path = args.dirPrefix + args.city.replace("/","_") + "Locations.txt"
+			print("scraping city: " + args.city + " for locations to " + path)
 			locations = scraper.getLocations(args.city)
-			path = args.dirPrefix + args.city.replace("/","_") + "Locations"
-			print(path)
-			file = open(path, "w+")
+			file = open(path, "w")
 			for loc in locations:
 				file.write(loc+ "\n")
 			file.close()
 		
 		if(args.location != "no"):
-			print("Scraping location " + args.location + " for number of pictures posted between " + str(dateFrom) + " and " + str(dateTo))
+			path = args.dirPrefix + args.location.replace("/","_") + "Postcounts.txt"
+			print("Scraping location " + args.location + " for number of pictures posted between " + str(dateFrom) + " and " + str(dateTo) + " to " + path)
 			numPosts = scraper.scrape(dirPrefix=args.dirPrefix, location=args.location, dateTo=dateTo, dateFrom=dateFrom)
 			print(str(numPosts))
-			file = open((args.dirPrefix + dateTo.isoformat()).replace(":", "h", 1).replace(":", "m", 1), "a+")
-			file.write(args.location + "\t" + str(numPosts) + "\n")
+			file = open(path, "a+")
+			file.write(dateTo.isoformat() + "\t" + str(numPosts) + "\n")
 			file.close()
 
 	except Exception as e:
