@@ -1,11 +1,8 @@
 import argparse
-import sys
 from sys import platform
 import time
-import selenium
 from selenium import webdriver
 from selenium.webdriver.common.by import By
-from selenium.common.exceptions import NoSuchElementException, TimeoutException
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 from datetime import datetime
@@ -52,7 +49,7 @@ class LocationScraper(object):
 	def quit(self):
 		self.driver.quit()
 
-	def scrape(self, dirPrefix, location, dateTo, dateFrom):
+	def scrape(self, location, dateTo, dateFrom):
 		self.browseTargetPage(location)
 		postList = self.scrollToDate(dateFrom)
 		firstPostIndex = self.findFirstPost(dateFrom, postList)
@@ -72,7 +69,6 @@ class LocationScraper(object):
 			pass
 		else:
 			loadmore.click()
-		scrollMore = True
 		while(True):
 			postList = self.driver.find_elements_by_class_name(POST)
 			postList[-1].click()
@@ -132,7 +128,7 @@ def main():
 	parser.add_argument("-t", "--timeWindow", type=float, default=1.0, help="Timeframe to check number of posts")
 	parser.add_argument("-c", "--city", type=str, default="no", help="City to scrape location links from, eg c579270 for Munich")
 	parser.add_argument("-dir", "--dirPrefix", type=str, default="./data/", help="directory to save results")
-	
+
 
 	args = parser.parse_args()
 	#  End Argparse #
@@ -148,26 +144,26 @@ def main():
 	scraper = LocationScraper()
 	try:
 		if(args.city != "no"):
-			path = args.dirPrefix + args.city.replace("/","_") + "Locations.txt"
+			path = args.dirPrefix + "Locations" + args.city.replace("/","_") + "Locations.txt"
 			print("scraping city: " + args.city + " for locations to " + path)
 			locations = scraper.getLocations(args.city)
 			file = open(path, "w")
 			for loc in locations:
 				file.write(loc+ "\n")
 			file.close()
-		
+
 		if(args.location != "no"):
-			path = args.dirPrefix + args.location.replace("/","_") + "Postcounts.txt"
+			path = args.dirPrefix + "Postcounts" + args.location.replace("/","_") + "Postcounts.txt"
 			print("Scraping location " + args.location + " for number of pictures posted between " + str(dateFrom) + " and " + str(dateTo) + " to " + path)
-			numPosts = scraper.scrape(dirPrefix=args.dirPrefix, location=args.location, dateTo=dateTo, dateFrom=dateFrom)
+			numPosts = scraper.scrape(location=args.location, dateTo=dateTo, dateFrom=dateFrom)
 			print(str(numPosts))
 			file = open(path, "a+")
 			file.write(dateTo.isoformat() + "\t" + str(numPosts) + "\n")
 			file.close()
 
-	except Exception as e:
+	except:
 		traceback.print_exc()
-	
+
 	scraper.quit()
 
 main()

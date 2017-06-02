@@ -1,34 +1,16 @@
 Feel free to open a Github issue if you have any problems running the code
 ---
-# InstagramCrawler
-A non API python program to crawl public photos, posts
-
-### Example:
-Download the first 100 photos and captions(user's posts, if any) from username "instagram"
-
-NOTE: When I ran on public account 'instagram', somehow it stops at caption 29
-```
-$ python instagramcrawler.py -q instagram -c -n 100
-```
-Search for the hashtag "#breakfast" and download first 50 photos
-```
-$ python instagramcrawler.py -q #breakfast -n 50
-```
-
-Record the first 30 followers of the username "instagram", requires you to be  logged in
-```
-$ python instagramcrawler.py -q instagram -t followers -n 30
-```
-
+# LocationCrawler
+A non API python program to scrape number of posts at a location, as well as locations in a city
 ### Full usage:
 ```
-usage: instagramcrawler.py [-h] [-q QUERY] [-n NUMBER] [-c] [-d DIR]
+usage: python LocationCrawler.py [-l LOCATION] [-t TIMEWINDOW]
 ```
-  - [-d DIR]: the directory to save crawling results, default is <./data/[query]>
-  - [-q QUERY] : username, add <#> to search for hashtags, e.g. <username>, <#hashtag>
-  - [-t CRAWL_TYPE]: crawl_type, Options: <photos | followers | following>
-  - [-c]: add this flag to download captions(what user wrote to describe their photos)
-  - [-n NUMBER]: number of posts, followers, or following to crawl, omit to get all
+"-d", "--date", type=str, default="now", help="Date up till which to scrape"
+"-l", "--location", type=str, default="no", help="Location Number eg. 214335386 for Englischer Garten"
+"-t", "--timeWindow", type=float, default=1.0, help="Timeframe to check number of posts in hours eg. 1"
+"-c", "--city", type=str, default="no", help="City to scrape location links from, eg c579270 for Munich"
+"-dir", "--dirPrefix", type=str, default="./data/", help="directory to save results"
 
 
 ### Installation
