@@ -5,7 +5,6 @@ A non API python program to scrape number of posts at a location, as well as loc
 ```
 usage: LocationCrawler.py [-h] [-d DATE] [-l LOCATION] [-t TIMEWINDOW]
                           [-c CITY] [-dir DIRPREFIX]
-```
 
 Instagram Location Scraper
 
@@ -17,6 +16,7 @@ optional arguments:
   -c, --city         City to scrape location links from, eg c579270 for Munich
   -dir, --dirPrefix  directory to save results, default: ./data/
 
+```
 
 ### Installation
 download chromedriver here: https://sites.google.com/a/chromium.org/chromedriver/
