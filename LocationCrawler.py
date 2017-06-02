@@ -78,6 +78,7 @@ class LocationScraper(object):
 			if(date <= dateFrom):
 				return postList
 			self.driver.execute_script(SCROLL_DOWN)
+			time.sleep(0.1)
 
 	def findFirstPost(self, dateFrom, postList):
 		for i in range(1, len(postList)): #start looking from the back
@@ -123,11 +124,11 @@ def main():
 	#   Arguments  #
 	parser = argparse.ArgumentParser(description="Instagram Location Scraper")
 	#parser.add_argument("-df", "--dateFrom", type=str, default="now - 1h", help="Date from which to scrape")
-	parser.add_argument("-d", "--date", type=str, default="now", help="Date up till which to scrape")
-	parser.add_argument("-l", "--location", type=str, default="no", help="Location Number eg. 214335386 for Englischer Garten")
-	parser.add_argument("-t", "--timeWindow", type=float, default=1.0, help="Timeframe to check number of posts")
+	parser.add_argument("-d", "--date", type=str, default="now", help="Date up till which to scrape, eg. 2017-06-01T10:00:00")
+	parser.add_argument("-l", "--location", type=str, default="no", help="Location Number to scrape, eg. 214335386 for Englischer Garten")
+	parser.add_argument("-t", "--timeWindow", type=float, default=1.0, help="Timeframe to check number of posts in hours, eg. 1.0")
 	parser.add_argument("-c", "--city", type=str, default="no", help="City to scrape location links from, eg c579270 for Munich")
-	parser.add_argument("-dir", "--dirPrefix", type=str, default="./data/", help="directory to save results")
+	parser.add_argument("-dir", "--dirPrefix", type=str, default="./data/", help="directory to save results, default: ./data/")
 
 
 	args = parser.parse_args()
@@ -139,24 +140,24 @@ def main():
 		dateTo = dateutil.parser.parse(args.date, ignoretz=True)
 	dateFrom = dateTo - timedelta(hours=args.timeWindow)
 
-	os.makedirs(args.dirPrefix, exist_ok=True)
-
 	scraper = LocationScraper()
 	try:
 		if(args.city != "no"):
-			path = args.dirPrefix + "Locations" + args.city.replace("/","_") + "Locations.txt"
+			path = args.dirPrefix + "Locations/" + args.city.replace("/","_") + "Locations.txt"
 			print("scraping city: " + args.city + " for locations to " + path)
 			locations = scraper.getLocations(args.city)
+			os.makedirs(os.path.dirname(path), exist_ok=True)
 			file = open(path, "w")
 			for loc in locations:
 				file.write(loc+ "\n")
 			file.close()
 
 		if(args.location != "no"):
-			path = args.dirPrefix + "Postcounts" + args.location.replace("/","_") + "Postcounts.txt"
+			path = args.dirPrefix + "Postcounts/" + args.location.replace("/","_") + "Postcounts.txt"
 			print("Scraping location " + args.location + " for number of pictures posted between " + str(dateFrom) + " and " + str(dateTo) + " to " + path)
 			numPosts = scraper.scrape(location=args.location, dateTo=dateTo, dateFrom=dateFrom)
 			print(str(numPosts))
+			os.makedirs(os.path.dirname(path), exist_ok=True)
 			file = open(path, "a+")
 			file.write(dateTo.isoformat() + "\t" + str(numPosts) + "\n")
 			file.close()
