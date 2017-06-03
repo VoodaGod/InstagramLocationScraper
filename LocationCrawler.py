@@ -10,7 +10,7 @@ from datetime import timedelta
 import dateutil.parser
 import traceback
 import os
-
+import threading
 
 
 # URLS
@@ -35,14 +35,16 @@ SCROLL_DOWN = "window.scrollTo(0, document.body.scrollHeight);"
 CHROME_PROFILE_PATH = ".\Scraper"
 
 class LocationScraper(object):
-	def __init__(self):
+	def __init__(self, profilePath=CHROME_PROFILE_PATH):
 		options = webdriver.ChromeOptions()
-		options.add_argument("user-data-dir=" + CHROME_PROFILE_PATH)
+		prefs = {"profile.managed_default_content_settings.images":2}
+		options.add_argument("user-data-dir=" + profilePath)
+		options.add_experimental_option("prefs", prefs)
 
 		if platform == "win32":
-			self.driver = webdriver.Chrome(executable_path = "./chromedriverWIN.exe", chrome_options = options)
+			self.driver = webdriver.Chrome(executable_path="./chromedriverWIN.exe", chrome_options=options)
 		elif platform == "darwin":
-			self.driver = webdriver.Chrome(executable_path = "./chromedriverMAC", chrome_options=options)
+			self.driver = webdriver.Chrome(executable_path="./chromedriverMAC", chrome_options=options)
 		else:
 			print("neither Windows nor Mac detected")
 
@@ -166,6 +168,21 @@ def scrapeLocationToFile(dirPrefix, location, date, timeWindow, scraper):
 	file.write(dateTo.isoformat() + "\t" + str(numPosts) + "\n")
 	file.close()
 
+
+class ScrapeThread(threading.Thread):
+	def __init__(self, target, args, threads, toJoin=-1):
+		threading.Thread.__init__(self)
+		self.target = target
+		self.args = args
+		self.threads = threads
+		self.toJoin = toJoin
+
+	def run(self):
+		if(self.toJoin >= 0):
+			self.threads[self.toJoin].join()
+		self.target(*self.args)
+
+
 def main():
 	#   Arguments  #
 	parser = argparse.ArgumentParser(description="Instagram Location Scraper")
@@ -174,38 +191,52 @@ def main():
 	parser.add_argument("-t", "--timeWindow", type=float, default=1.0, help="Timeframe to check number of posts in hours, eg. 1.0")
 	parser.add_argument("-c", "--city", type=str, default="no", help="City to scrape location links from, eg. c579270 for Munich")
 	parser.add_argument("-dir", "--dirPrefix", type=str, default="./data/", help="directory to save results, default: ./data/")
-	parser.add_argument("-list", default=["no", "no"], nargs=2, help="File containing a list of locations/cities to scrape, specify with c or l, eg. -list c")
+	parser.add_argument("-list", "--fromList", default=["no", "no"], nargs=2, help="File containing a list of locations/cities to scrape, specify with c or l, eg. -list c")
+	parser.add_argument("-threads", "--threadCount", type=int, default=1, help="how many threads to use")
 
 	args = parser.parse_args()
 	#  End Argparse #
 
-	scraper = LocationScraper()
-	try:
-		if(args.city != "no"):
-			scrapeCityToFile(args.dirPrefix, args.city, scraper)
-
-		if(args.location != "no"):
-			scrapeLocationToFile(args.dirPrefix, args.location, args.date, args.timeWindow, scraper)
-
-		if((args.list[0] != "no") and (args.list[1] != "no")):
-			file = open(args.list[0])
-			cities, locs = False, False
-			if(args.list[1] == "c"):
-				cities = True
-			elif(args.list[1] == "l"):
-				locs = True
-			line = file.readline().replace("\n", "")
+	if((args.fromList[0] != "no") and (args.fromList[1] != "no")):
+		scrapers = []
+		threads = []
+		for i in range(args.threadCount):
+			scrapers.append(LocationScraper(profilePath=CHROME_PROFILE_PATH + str(i)))
+		file = open(args.fromList[0])
+		cities, locs = False, False
+		if(args.fromList[1] == "c"):
+			cities = True
+		elif(args.fromList[1] == "l"):
+			locs = True
+		line = file.readline().replace("\n", "")
+		try:
 			while(line != ""):
+				toJoin = 0
+				if(len(threads) >= args.threadCount):
+					toJoin = len(threads) - args.threadCount
 				if(cities):
-					scrapeCityToFile(args.dirPrefix, line, scraper)
+					threads.append(ScrapeThread(scrapeCityToFile, (args.dirPrefix, line, scrapers[len(threads) % args.threadCount]), threads, toJoin))
 				elif(locs):
-					scrapeLocationToFile(args.dirPrefix, line, args.date, args.timeWindow, scraper)
+					threads.append(ScrapeThread(scrapeLocationToFile, (args.dirPrefix, line, args.date, args.timeWindow, scrapers[len(threads) % args.threadCount]), threads, toJoin))
+				threads[-1].start()
 				line = file.readline().replace("\n", "")
+
 			file.close()
+		except:
+			for s in scrapers:
+				s.quit()
+			traceback.print_exc()
 
-	except:
-		traceback.print_exc()
+	else:
+		scraper = LocationScraper()
+		try:
+			if(args.city != "no"):
+				scrapeCityToFile(args.dirPrefix, args.city, scraper)
 
-	scraper.quit()
+			if(args.location != "no"):
+				scrapeLocationToFile(args.dirPrefix, args.location, args.date, args.timeWindow, scraper)
+		except:
+			traceback.print_exc()
+		scraper.quit()
 
 main()

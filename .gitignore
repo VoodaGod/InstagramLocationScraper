@@ -1,6 +1,6 @@
 env
 data
 *.pyc
-Scraper
+Scraper*
 *.log
 .vscode
