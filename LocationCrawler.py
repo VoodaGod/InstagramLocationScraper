@@ -52,7 +52,7 @@ class LocationScraper(object):
 	def scrapeLocation(self, location, dateTo, dateFrom):
 		self.browseTargetPage(location)
 		postList = self.scrollToDate(dateFrom)
-		if(len(postList <= 9)):
+		if(len(postList) <= 9):
 			return 0 #only top posts
 		firstPostIndex = self.findFirstPost(dateFrom, postList)
 		lastPostIndex = self.findLastPost(dateTo, postList, firstPostIndex)
@@ -84,7 +84,7 @@ class LocationScraper(object):
 
 	def findFirstPost(self, dateFrom, postList):
 		#start looking from the back
-		for i in range(1, len(postList)):
+		for i in range(1, (len(postList) - 9)):
 			postList[-i].click()
 			try:
 				dateElement = WebDriverWait(self.driver, 2).until(EC.presence_of_element_located((By.CSS_SELECTOR, CSS_DATE)))
