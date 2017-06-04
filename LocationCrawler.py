@@ -158,6 +158,10 @@ def scrapeLocationToFile(dirPrefix, location, date, timeWindow, scraper):
 	else:
 		dateTo = dateutil.parser.parse(date, ignoretz=True)
 	dateFrom = dateTo - timedelta(hours=timeWindow)
+	if(dateTo > datetime.utcnow()):
+		print("waiting until " + dateTo.isoformat())
+		while(dateTo > datetime.utcnow()):
+			time.sleep(10)
 
 	path = dirPrefix + "Postcounts/" + location.replace("/","_") + "Postcounts.txt"
 	print("Scraping location " + location + " for number of pictures posted between " + str(dateFrom) + " and " + str(dateTo) + " to " + path)
@@ -260,7 +264,7 @@ def main():
 			s.quit()
 
 		end = datetime.now()
-		print (str(end - start))
+		print ("elapsed time: " + str(end - start))
 
 	else:
 		scraper = LocationScraper()
