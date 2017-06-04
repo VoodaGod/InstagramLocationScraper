@@ -5,7 +5,7 @@ from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
-from selenium.common.exceptions import TimeoutException
+from selenium.common.exceptions import TimeoutException, WebDriverException
 from datetime import datetime
 from datetime import timedelta
 import dateutil.parser
@@ -19,15 +19,15 @@ HOST = "https://www.instagram.com"
 RELATIVE_URL_LOCATION = "/explore/locations/"
 DEFAULT_URL = "about:blank"
 
-# SELENIUM CSS SELECTOR
-CSS_LOAD_MORE = "a._8imhp._glz1g"
-CSS_DATE = "a time"
+#Element locators
+LOAD_MORE = (By.CSS_SELECTOR, "a._8imhp._glz1g")
+DATE = (By.CSS_SELECTOR, "time")
+CLOSE_BUTTON = (By.CLASS_NAME, "_3eajp")
+SEE_MORE = (By.CLASS_NAME, "_jn623")
 
-# CLASS NAMES
-CLOSE_BUTTON = "_3eajp"
-POST = "_ovg3g"
-SEE_MORE = "_jn623"
+#Class names
 LOCATION_LINK = "_3hq20"
+POST = "_ovg3g"
 
 # JAVASCRIPT COMMANDS
 SCROLL_UP = "window.scrollTo(0, 0);"
@@ -68,71 +68,79 @@ class LocationScraper(object):
 		targetURL = HOST + RELATIVE_URL_LOCATION + location
 		self.driver.get(targetURL)
 
+	def clickElement(self, locator=(), element=None):
+		try:
+			if(locator != ()):
+				WebDriverWait(self.driver, 10).until(EC.element_to_be_clickable(locator)).click()
+			if(element != None):
+				element.click()
+			return True
+		except TimeoutException:
+			return False
+		except WebDriverException:
+			print("try clicking higher")
+			try:
+				webdriver.ActionChains(self.driver).move_to_element_with_offset(element, 0, 20).click().perform()
+				return True
+			except:
+				traceback.print_exc()
+				return False
+
 	#scrolls until an imager older than dateFrom is found
 	def scrollToDate(self, dateFrom):
 		self.driver.execute_script(SCROLL_DOWN)
-		try:
-			loadmore = WebDriverWait(self.driver, 10).until(EC.presence_of_element_located((By.CSS_SELECTOR, CSS_LOAD_MORE)))
-		except: #TimeoutException:
-			pass
-		else:
-			loadmore.click()
+		loaded = False
 		while(True):
 			postList = self.driver.find_elements_by_class_name(POST)
-			postList[-1].click()
-			dateElement = WebDriverWait(self.driver, 10).until(EC.presence_of_element_located((By.CSS_SELECTOR, CSS_DATE)))
+			self.clickElement(element=postList[-1])
+			dateElement = WebDriverWait(self.driver, 10).until(EC.presence_of_element_located(DATE))
 			date = dateutil.parser.parse(dateElement.get_attribute("datetime"), ignoretz=True)
-			closeButton = WebDriverWait(self.driver, 10).until(EC.presence_of_element_located((By.CLASS_NAME, CLOSE_BUTTON)))
-			closeButton.click()
+			self.clickElement(locator=CLOSE_BUTTON)
 			if(date <= dateFrom):
 				return postList
 			self.driver.execute_script(SCROLL_DOWN)
+			if(not loaded):
+				self.clickElement(LOAD_MORE)
+				loaded = True
 			time.sleep(0.1)
 
-	def findFirstPost(self, dateFrom, postList):
-		#start looking from the back
-		for i in range(1, (len(postList) - 9)):
-			postList[-i].click()
-			dateElement = WebDriverWait(self.driver, 10).until(EC.presence_of_element_located((By.CSS_SELECTOR, CSS_DATE)))
+	def binaryDateSearch(self, dateCmp, postList, left, right):
+		while(True):
+			middle = int((left + right) / 2)
+			self.clickElement(element=postList[middle])
+			try:
+				dateElement = WebDriverWait(self.driver, 10).until(EC.presence_of_element_located(DATE))
+			except TimeoutException:
+				print("couldn't locate date element")
 			date = dateutil.parser.parse(dateElement.get_attribute("datetime"), ignoretz=True)
-			closeButton = WebDriverWait(self.driver, 10).until(EC.presence_of_element_located((By.CLASS_NAME, CLOSE_BUTTON)))
-			closeButton.click()
-			if (date >= dateFrom):
-				return len(postList) - i
-		return 9 #no posts since dateFrom, return first post in "most recent"
+			self.clickElement(locator=CLOSE_BUTTON)
+			if(date > dateCmp):
+				left = middle + 1
+			elif(date < dateCmp):
+				right = middle - 1
+			if(right < left):
+				return left
+
+	def findFirstPost(self, dateFrom, postList):
+		#binary search on last 12 loaded posts, as posts[-13] is younger than dateFrom
+		left = len(postList) - 12
+		right = len(postList) - 1
+		match = self.binaryDateSearch(dateFrom, postList, left, right)
+		return match
 
 	def findLastPost(self, dateTo, postList, firstPostIndex):
 		#binary search
-		left = 9
+		left = 9 #first 9 posts are "top posts"
 		right = firstPostIndex
-		while(True):
-			middle = int((left + right) / 2)
-			if(right < left):
-				return left
-			if(left > right):
-				return right
-			postList[middle].click()
-			try:
-				dateElement = WebDriverWait(self.driver, 10).until(EC.presence_of_element_located((By.CSS_SELECTOR, CSS_DATE)))
-			except TimeoutException:
-				continue
-			date = dateutil.parser.parse(dateElement.get_attribute("datetime"), ignoretz=True)
-			closeButton = WebDriverWait(self.driver, 10).until(EC.presence_of_element_located((By.CLASS_NAME, CLOSE_BUTTON)))
-			closeButton.click()
-			if(date > dateTo):
-				left = middle + 1
-			elif(date < dateTo):
-				right = middle - 1
+		match = self.binaryDateSearch(dateTo, postList, left, right)
+		return match
 
 	def scrapeCity(self, city):
 		self.browseTargetPage(city)
 		while(True):
 			self.driver.execute_script(SCROLL_DOWN)
-			try:
-				seeMore = WebDriverWait(self.driver,5).until(EC.presence_of_element_located((By.CLASS_NAME, SEE_MORE)))
-			except TimeoutException:
+			if(not self.clickElement(locator=SEE_MORE)):
 				break
-			seeMore.click()
 			time.sleep(0.75)
 
 		locationLinks = []
@@ -185,10 +193,12 @@ class ScrapeThread(threading.Thread):
 	def run(self):
 		try:
 			self.target(*self.args)
-			self.scraperFree = True
 		except:
+			print("\nException in: " + self.name + ", " + self.args[1])
 			traceback.print_exc()
-			self.scraper.quit()
+			print("")
+		finally:
+			self.scraperFree = True
 
 
 def main():
@@ -205,14 +215,14 @@ def main():
 	args = parser.parse_args()
 	#  End Argparse #
 
+	start = datetime.now()
+
 	if((args.fromList[0] != "no") and (args.fromList[1] != "no")):
 		cities, locs = False, False
 		if(args.fromList[1] == "c"):
 			cities = True
 		elif(args.fromList[1] == "l"):
 			locs = True
-
-		start = datetime.now()
 
 		try:
 			file = open(args.fromList[0])
@@ -236,6 +246,7 @@ def main():
 				threads[i].start()
 				i += 1
 
+			i = 0
 			while(True):
 				if(threading.active_count() <= args.threadCount):
 					if(i > (len(lines) - 1)):
@@ -256,15 +267,13 @@ def main():
 				t.join()
 
 		except:
+			print("\nException in mainthread: ")
+			#traceback.print_exc()
+			print("")
+			raise
+		finally:
 			for s in scrapers:
 				s.quit()
-			traceback.print_exc()
-
-		for s in scrapers:
-			s.quit()
-
-		end = datetime.now()
-		print ("elapsed time: " + str(end - start))
 
 	else:
 		scraper = LocationScraper()
@@ -275,8 +284,12 @@ def main():
 			if(args.location != "no"):
 				scrapeLocationToFile(args.dirPrefix, args.location, args.date, args.timeWindow, scraper)
 		except:
-			traceback.print_exc()
+			#traceback.print_exc()
+			raise
 		finally:
 			scraper.quit()
+
+	end = datetime.now()
+	print ("elapsed time: " + str(end - start))
 
 main()
