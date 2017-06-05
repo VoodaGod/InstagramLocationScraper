@@ -59,7 +59,7 @@ class LocationScraper(object):
 		self.browseTargetPage(location)
 		postList = self.scrollToDate(dateFrom)
 		if(len(postList) <= 9):
-			return 0 #only top posts
+			return 0 #no recent posts, only "top posts" or none
 		firstPostIndex = self.findFirstPost(dateFrom, postList)
 		lastPostIndex = self.findLastPost(dateTo, postList, firstPostIndex)
 		return (firstPostIndex - lastPostIndex)
@@ -69,22 +69,26 @@ class LocationScraper(object):
 		self.driver.get(targetURL)
 
 	def clickElement(self, locator=(), element=None):
+		el = None
 		try:
 			if(locator != ()):
-				WebDriverWait(self.driver, 10).until(EC.element_to_be_clickable(locator)).click()
-			if(element != None):
-				element.click()
+				el = WebDriverWait(self.driver, 10).until(EC.element_to_be_clickable(locator))
+				el.click()
+			elif(element != None):
+				el = element
+				el.click()
 			return True
 		except TimeoutException:
 			return False
 		except WebDriverException:
 			print("try clicking higher")
 			try:
-				webdriver.ActionChains(self.driver).move_to_element_with_offset(element, 0, 20).click().perform()
+				webdriver.ActionChains(self.driver).move_to_element_with_offset(el, 0, 20).click().perform()
 				return True
 			except:
 				traceback.print_exc()
 				return False
+			print("ok")
 
 	#scrolls until an imager older than dateFrom is found
 	def scrollToDate(self, dateFrom):
@@ -92,6 +96,8 @@ class LocationScraper(object):
 		loaded = False
 		while(True):
 			postList = self.driver.find_elements_by_class_name(POST)
+			if(len(postList) < 9):
+				return [] #no recent posts, only "top posts" or none
 			self.clickElement(element=postList[-1])
 			dateElement = WebDriverWait(self.driver, 10).until(EC.presence_of_element_located(DATE))
 			date = dateutil.parser.parse(dateElement.get_attribute("datetime"), ignoretz=True)
@@ -103,6 +109,7 @@ class LocationScraper(object):
 				self.clickElement(LOAD_MORE)
 				loaded = True
 			time.sleep(0.1)
+		return True
 
 	def binaryDateSearch(self, dateCmp, postList, left, right):
 		while(True):
@@ -112,6 +119,7 @@ class LocationScraper(object):
 				dateElement = WebDriverWait(self.driver, 10).until(EC.presence_of_element_located(DATE))
 			except TimeoutException:
 				print("couldn't locate date element")
+				return 0
 			date = dateutil.parser.parse(dateElement.get_attribute("datetime"), ignoretz=True)
 			self.clickElement(locator=CLOSE_BUTTON)
 			if(date > dateCmp):
@@ -123,7 +131,10 @@ class LocationScraper(object):
 
 	def findFirstPost(self, dateFrom, postList):
 		#binary search on last 12 loaded posts, as posts[-13] is younger than dateFrom
-		left = len(postList) - 12
+		if((len(postList) - 9) < 12):
+			left = 9 #no full page of most recent with 12 posts
+		else:
+			left = len(postList) - 12 #only search in most recently loaded full page of most recent posts
 		right = len(postList) - 1
 		match = self.binaryDateSearch(dateFrom, postList, left, right)
 		return match
@@ -209,7 +220,7 @@ def main():
 	parser.add_argument("-t", "--timeWindow", type=float, default=1.0, help="Timeframe to check number of posts in hours, eg. 1.0")
 	parser.add_argument("-c", "--city", type=str, default="no", help="City to scrape location links from, eg. c579270 for Munich")
 	parser.add_argument("-dir", "--dirPrefix", type=str, default="./data/", help="directory to save results, default: ./data/")
-	parser.add_argument("-list", "--fromList", default=["no", "no"], nargs=2, help="File containing a list of locations/cities to scrape, specify with c or l, eg. -list c")
+	parser.add_argument("-list", "--fromList", default=["no", "no"], nargs=2, help="File containing a list of locations/cities to scrape, specify with c or l, eg. -list cities.txt c")
 	parser.add_argument("-threads", "--threadCount", type=int, default=1, help="how many threads to use")
 
 	args = parser.parse_args()
@@ -221,28 +232,37 @@ def main():
 		cities, locs = False, False
 		if(args.fromList[1] == "c"):
 			cities = True
+			path = args.dirPrefix
 		elif(args.fromList[1] == "l"):
 			locs = True
+			cityName = args.fromList[0].split("/")[-1].replace("_Locations.txt", "") #folder with city name
+			path = args.dirPrefix + cityName + "/"
 
+
+		lines = []
 		try:
-			file = open(args.fromList[0])
-			lines = []
+			file = open(args.fromList[0], "r")
+		except FileNotFoundError:
+			print("File not found")
+			return
+		else:
 			lines.append(file.readline().strip('\n'))
 			while(lines[-1] != ""):
 				lines.append(file.readline().strip('\n'))
 			lines.pop()
 			file.close()
 
+		scrapers= []
+		threads = []
+		try:
 			print("Starting Scrapers")
-			scrapers= []
-			threads = []
 			i = 0
 			while(i < min(args.threadCount, len(lines))):
 				scrapers.append(LocationScraper(profilePath=CHROME_PROFILE_PATH + str(i)))
 				if(cities):
-					threads.append(ScrapeThread(target=scrapeCityToFile, args=(args.dirPrefix, lines[i], scrapers[i]), scraper=scrapers[i]))
+					threads.append(ScrapeThread(target=scrapeCityToFile, args=(path, lines[i], scrapers[i]), scraper=scrapers[i]))
 				elif(locs):
-					threads.append(ScrapeThread(target=scrapeLocationToFile, args=(args.dirPrefix, lines[i], args.date, args.timeWindow, scrapers[i]), scraper=scrapers[i]))
+					threads.append(ScrapeThread(target=scrapeLocationToFile, args=(path, lines[i], args.date, args.timeWindow, scrapers[i]), scraper=scrapers[i]))
 				threads[i].start()
 				i += 1
 
@@ -255,9 +275,9 @@ def main():
 						if(t.scraperFree):
 							t.scraperFree = False
 							if(cities):
-								threads.append(ScrapeThread(target=scrapeCityToFile, args=(args.dirPrefix, lines[i], t.scraper), scraper=t.scraper))
+								threads.append(ScrapeThread(target=scrapeCityToFile, args=(path, lines[i], t.scraper), scraper=t.scraper))
 							elif(locs):
-								threads.append(ScrapeThread(target=scrapeLocationToFile, args=(args.dirPrefix, lines[i], args.date, args.timeWindow, t.scraper), scraper=t.scraper))
+								threads.append(ScrapeThread(target=scrapeLocationToFile, args=(path, lines[i], args.date, args.timeWindow, t.scraper), scraper=t.scraper))
 							threads[-1].start()
 							i += 1
 							break
@@ -272,8 +292,9 @@ def main():
 			print("")
 			raise
 		finally:
-			for s in scrapers:
-				s.quit()
+			if(scrapers != []):
+				for s in scrapers:
+					s.quit()
 
 	else:
 		scraper = LocationScraper()
