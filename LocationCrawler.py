@@ -111,15 +111,22 @@ class LocationScraper(object):
 		self.driver.execute_script(SCROLL_DOWN)
 		loaded = False
 		prevLength = 0
+		scrollCounter = 0
 		while(True):
 			postList = self.driver.find_elements_by_class_name(POST)
-			if(not (len(postList) > prevLength)):
-				self.driver.execute_script(SCROLL_DOWN)
-				time.sleep(0.1)
-				continue
-			prevLength = len(postList)
 			if(len(postList) < 9):
 				return [] #no recent posts, only "top posts" or none
+			if(not (len(postList) > prevLength)):
+				self.driver.execute_script(SCROLL_DOWN)
+				scrollCounter += 1
+				time.sleep(0.25)
+				if(scrollCounter > 10):
+					return postList
+				else:
+					continue
+			else:
+				scrollCounter = 0
+			prevLength = len(postList)
 			if(maxPosts >= 0):
 				while(len(postList) > (maxPosts + 9)):
 					postList.pop()
@@ -210,7 +217,7 @@ def getLinesInFile(filePath):
 		file = open(filePath, "r")
 	except FileNotFoundError:
 		print("File not found")
-		return
+		return lines
 	else:
 		lines.append(file.readline().strip('\n'))
 		while(lines[-1] != ""):
