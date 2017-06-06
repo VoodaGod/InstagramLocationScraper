@@ -118,7 +118,6 @@ class LocationScraper(object):
 				time.sleep(0.1)
 				continue
 			prevLength = len(postList)
-			print(len(postList))
 			if(len(postList) < 9):
 				return [] #no recent posts, only "top posts" or none
 			if(maxPosts >= 0):
@@ -272,9 +271,10 @@ def scrapeLocationsFromFolder(dirString, suffix, dirPrefix, date, timeWindow, th
 		fileName = os.fsdecode(file)
 		if(fileName.endswith(suffix)):
 			print("getting locations in " + fileName)
-			targetDirs.append(dirPrefix + fileName.replace(suffix, "")) #remove ending
 			filePath = dirString + fileName
-			locations.extend(getLinesInFile(filePath))
+			for line in getLinesInFile(filePath):
+				locations.append(line)
+				targetDirs.append(dirPrefix + fileName.replace(suffix, "")) #remove ending
 
 	scrapeLocationsFromList(locations, targetDirs, date, timeWindow, threadCount, maxPosts, scrapers)
 
