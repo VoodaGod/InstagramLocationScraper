@@ -52,6 +52,8 @@ class LocationScraper(object):
 		else:
 			print("neither Windows nor Mac detected")
 
+		self.inUse = False
+
 	def quit(self):
 		self.driver.quit()
 
@@ -150,6 +152,7 @@ class LocationScraper(object):
 		self.browseTargetPage(city)
 		while(True):
 			self.driver.execute_script(SCROLL_DOWN)
+			time.sleep(0.1)
 			if(not self.clickElement(locator=SEE_MORE)):
 				break
 			time.sleep(0.75)
@@ -182,7 +185,7 @@ def scrapeLocationToFile(dirPrefix, location, date, timeWindow, scraper):
 		while(dateTo > datetime.utcnow()):
 			time.sleep(10)
 
-	path = dirPrefix + "Postcounts/" + location.replace("/","_") + "Postcounts.txt"
+	path = dirPrefix + "_Postcounts/" + location.replace("/","_") + "Postcounts.txt"
 	print("Scraping location " + location + " for number of pictures posted between " + str(dateFrom) + " and " + str(dateTo) + " to " + path)
 	numPosts = scraper.scrapeLocation(location=location, dateTo=dateTo, dateFrom=dateFrom)
 
@@ -192,125 +195,148 @@ def scrapeLocationToFile(dirPrefix, location, date, timeWindow, scraper):
 	file.write(dateTo.isoformat() + "\t" + str(numPosts) + "\n")
 	file.close()
 
+def scrapeCitiesFromFile(filePath, dirPrefix, threadCount, scrapers):
+	lines = []
+	try:
+		file = open(filePath, "r")
+	except FileNotFoundError:
+		print("File not found")
+		return
+	else:
+		lines.append(file.readline().strip('\n'))
+		while(lines[-1] != ""):
+			lines.append(file.readline().strip('\n'))
+		lines.pop()
+		file.close()
+
+	threads = []
+	i = 0
+	while(True):
+		if(threading.active_count() <= threadCount):
+			if(i == len(lines)):
+				break
+			for s in scrapers:
+				if(not s.inUse):
+					threads.append(ScrapeThread(target=scrapeCityToFile, args=(dirPrefix, lines[i], s)))
+					threads[-1].start()
+					i += 1
+					break
+		time.sleep(0.5)
+
+	for t in threads:
+		t.join()
+
+def scrapeLocationsFromFile(filePath, dirPrefix, date, timeWindow, threadCount, scrapers):
+	lines = []
+	try:
+		file = open(filePath, "r")
+	except FileNotFoundError:
+		print("File not found")
+		return
+	else:
+		lines.append(file.readline().strip('\n'))
+		while(lines[-1] != ""):
+			lines.append(file.readline().strip('\n'))
+		lines.pop()
+		file.close()
+
+	threads = []
+	i = 0
+	while(True):
+		if(threading.active_count() <= threadCount):
+			if(i == len(lines)):
+				break
+			for s in scrapers:
+				if(not s.inUse):
+					threads.append(ScrapeThread(target=scrapeLocationToFile, args=(dirPrefix, lines[i], date, timeWindow, s)))
+					threads[-1].start()
+					i += 1
+					break
+		time.sleep(0.5)
+
+	for t in threads:
+		t.join()
+
+def scrapeLocationsFromFolder(dirString, suffix, dirPrefix, date, timeWindow, threadCount, scrapers):
+	directory = os.fsencode(dirString)
+	for file in os.listdir(directory):
+		fileName = os.fsdecode(file)
+		if(fileName.endswith(suffix)):
+			print("scraping locations in " + fileName)
+			targetFolder = dirPrefix + fileName.replace(suffix, "") #remove ending
+			filePath = dirString + fileName
+			scrapeLocationsFromFile(filePath, targetFolder, date, timeWindow, threadCount, scrapers)
+
 
 class ScrapeThread(threading.Thread):
-	def __init__(self, target, args, scraper):
+	def __init__(self, target, args):
 		threading.Thread.__init__(self)
 		self.target = target
 		self.args = args
-		self.scraperFree = False
-		self.scraper = scraper
+		self.scraper = args[-1]
+		self.scraper.inUse = True
 
 	def run(self):
 		try:
 			self.target(*self.args)
+			self.scraper.inUse = False
 		except:
 			print("\nException in: " + self.name + ", " + self.args[1])
 			traceback.print_exc()
 			print("")
-		finally:
-			self.scraperFree = True
+			self.scraper.inUse = False
+
 
 
 def main():
 	#   Arguments  #
 	parser = argparse.ArgumentParser(description="Instagram Location Scraper")
 	parser.add_argument("-d", "--date", type=str, default="now", help="Date up till which to scrape, eg. 2017-06-01T10:00:00")
-	parser.add_argument("-l", "--location", type=str, default="no", help="Location Number to scrape, eg. 214335386 for Englischer Garten")
+	parser.add_argument("-l", "--location", type=str, default="no", help="Location Number to scrape, eg. 214335386/ for Englischer Garten")
 	parser.add_argument("-t", "--timeWindow", type=float, default=1.0, help="Timeframe to check number of posts in hours, eg. 1.0")
-	parser.add_argument("-c", "--city", type=str, default="no", help="City to scrape location links from, eg. c579270 for Munich")
+	parser.add_argument("-c", "--city", type=str, default="no", help="City to scrape location links from, eg. c579270/ for Munich")
 	parser.add_argument("-dir", "--dirPrefix", type=str, default="./data/", help="directory to save results, default: ./data/")
-	parser.add_argument("-list", "--fromList", default=["no", "no"], nargs=2, help="File containing a list of locations/cities to scrape, specify with c or l, eg. -list cities.txt c")
+	parser.add_argument("-fromFile", default=["no", "no"], nargs=2, help="File containing a list of locations/cities to scrape, specify with c or l, eg. -list cities.txt c")
 	parser.add_argument("-threads", "--threadCount", type=int, default=1, help="how many threads to use")
+	parser.add_argument("-fromDir", type=str, default=("no", "no"), nargs=2, help="Directory containing files with lists of locations to scrape with suffix to specify which files to scrape, eg. -lDir ./data/Locations _Locations.txt")
 
 	args = parser.parse_args()
 	#  End Argparse #
 
+	scrapers = []
+	print("Starting Scrapers")
+	for i in range(len(scrapers), args.threadCount): #don't add more scrapers than threadCount
+		scrapers.append(LocationScraper(profilePath=CHROME_PROFILE_PATH + str(i)))
+
 	start = datetime.now()
 
-	if((args.fromList[0] != "no") and (args.fromList[1] != "no")):
-		cities, locs = False, False
-		if(args.fromList[1] == "c"):
-			cities = True
+	if(args.fromDir[0] != "no"):
+		dirPath = args.fromDir[0]
+		fileSuffix = args.fromDir[1]
+		scrapeLocationsFromFolder(dirPath, fileSuffix, args.dirPrefix, args.date, args.timeWindow, args.threadCount, scrapers)
+
+	if((args.fromFile[0] != "no") and (args.fromFile[1] != "no")):
+		filePath = args.fromFile[0]
+		typ = args.fromFile[1]
+		if(typ == "c"):
 			path = args.dirPrefix
-		elif(args.fromList[1] == "l"):
-			locs = True
-			cityName = args.fromList[0].split("/")[-1].replace("_Locations.txt", "") #folder with city name
-			path = args.dirPrefix + cityName + "/"
+			scrapeCitiesFromFile(filePath, path, args.threadCount, scrapers)
+		elif(typ == "l"):
+			cityName = filePath.split("/")[-1].replace("_Locations.txt", "") #folder with city name
+			dirPath = args.dirPrefix + cityName + "/"
+			scrapeLocationsFromFile(filePath, dirPath, args.date, args.timeWindow, args.threadCount, scrapers)
 
+	if(args.city != "no"):
+		scrapeCityToFile(args.dirPrefix, args.city, scrapers[0])
 
-		lines = []
-		try:
-			file = open(args.fromList[0], "r")
-		except FileNotFoundError:
-			print("File not found")
-			return
-		else:
-			lines.append(file.readline().strip('\n'))
-			while(lines[-1] != ""):
-				lines.append(file.readline().strip('\n'))
-			lines.pop()
-			file.close()
-
-		scrapers= []
-		threads = []
-		try:
-			print("Starting Scrapers")
-			i = 0
-			while(i < min(args.threadCount, len(lines))):
-				scrapers.append(LocationScraper(profilePath=CHROME_PROFILE_PATH + str(i)))
-				if(cities):
-					threads.append(ScrapeThread(target=scrapeCityToFile, args=(path, lines[i], scrapers[i]), scraper=scrapers[i]))
-				elif(locs):
-					threads.append(ScrapeThread(target=scrapeLocationToFile, args=(path, lines[i], args.date, args.timeWindow, scrapers[i]), scraper=scrapers[i]))
-				threads[i].start()
-				i += 1
-
-			i = 0
-			while(True):
-				if(threading.active_count() <= args.threadCount):
-					if(i > (len(lines) - 1)):
-						break
-					for t in threads:
-						if(t.scraperFree):
-							t.scraperFree = False
-							if(cities):
-								threads.append(ScrapeThread(target=scrapeCityToFile, args=(path, lines[i], t.scraper), scraper=t.scraper))
-							elif(locs):
-								threads.append(ScrapeThread(target=scrapeLocationToFile, args=(path, lines[i], args.date, args.timeWindow, t.scraper), scraper=t.scraper))
-							threads[-1].start()
-							i += 1
-							break
-				time.sleep(0.5)
-
-			for t in threads:
-				t.join()
-
-		except:
-			print("\nException in mainthread: ")
-			#traceback.print_exc()
-			print("")
-			raise
-		finally:
-			if(scrapers != []):
-				for s in scrapers:
-					s.quit()
-
-	else:
-		scraper = LocationScraper()
-		try:
-			if(args.city != "no"):
-				scrapeCityToFile(args.dirPrefix, args.city, scraper)
-
-			if(args.location != "no"):
-				scrapeLocationToFile(args.dirPrefix, args.location, args.date, args.timeWindow, scraper)
-		except:
-			#traceback.print_exc()
-			raise
-		finally:
-			scraper.quit()
+	if(args.location != "no"):
+		scrapeLocationToFile(args.dirPrefix, args.location, args.date, args.timeWindow, scrapers[0])
 
 	end = datetime.now()
 	print ("elapsed time: " + str(end - start))
+
+	if(len(scrapers) > 0):
+		for s in scrapers:
+			s.quit()
 
 main()
