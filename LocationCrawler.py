@@ -57,14 +57,28 @@ class LocationScraper(object):
 	def quit(self):
 		self.driver.quit()
 
-	def scrapeLocation(self, location, dateTo, dateFrom):
+	def scrapeLocation(self, location, dateTo, dateFrom, maxPosts):
 		self.browseTargetPage(location)
-		postList = self.scrollToDate(dateFrom)
+		postList = self.scrollToDate(dateFrom, maxPosts)
 		if(len(postList) <= 9):
 			return 0 #no recent posts, only "top posts" or none
 		firstPostIndex = self.findFirstPost(dateFrom, postList)
 		lastPostIndex = self.findLastPost(dateTo, postList, firstPostIndex)
 		return (firstPostIndex - lastPostIndex)
+
+	def scrapeCity(self, city):
+		self.browseTargetPage(city)
+		while(True):
+			self.driver.execute_script(SCROLL_DOWN)
+			time.sleep(0.1)
+			if(not self.clickElement(locator=SEE_MORE)):
+				break
+			time.sleep(0.75)
+
+		locationLinks = []
+		for element in self.driver.find_elements_by_class_name(LOCATION_LINK):
+			locationLinks.append(element.get_attribute("href").replace(HOST + RELATIVE_URL_LOCATION, ""))
+		return locationLinks
 
 	def browseTargetPage(self, location):
 		targetURL = HOST + RELATIVE_URL_LOCATION + location
@@ -93,13 +107,25 @@ class LocationScraper(object):
 			print("ok")
 
 	#scrolls until an imager older than dateFrom is found
-	def scrollToDate(self, dateFrom):
+	def scrollToDate(self, dateFrom, maxPosts):
 		self.driver.execute_script(SCROLL_DOWN)
 		loaded = False
+		prevLength = 0
 		while(True):
 			postList = self.driver.find_elements_by_class_name(POST)
+			if(not (len(postList) > prevLength)):
+				self.driver.execute_script(SCROLL_DOWN)
+				time.sleep(0.1)
+				continue
+			prevLength = len(postList)
+			print(len(postList))
 			if(len(postList) < 9):
 				return [] #no recent posts, only "top posts" or none
+			if(maxPosts >= 0):
+				while(len(postList) > (maxPosts + 9)):
+					postList.pop()
+				if(len(postList) == (maxPosts + 9)):
+					return postList
 			self.clickElement(element=postList[-1])
 			dateElement = WebDriverWait(self.driver, 10).until(EC.presence_of_element_located(DATE))
 			date = dateutil.parser.parse(dateElement.get_attribute("datetime"), ignoretz=True)
@@ -110,8 +136,6 @@ class LocationScraper(object):
 			if(not loaded):
 				self.clickElement(LOAD_MORE)
 				loaded = True
-			time.sleep(0.1)
-		return True
 
 	def binaryDateSearch(self, dateCmp, postList, left, right):
 		while(True):
@@ -148,20 +172,6 @@ class LocationScraper(object):
 		match = self.binaryDateSearch(dateTo, postList, left, right)
 		return match
 
-	def scrapeCity(self, city):
-		self.browseTargetPage(city)
-		while(True):
-			self.driver.execute_script(SCROLL_DOWN)
-			time.sleep(0.1)
-			if(not self.clickElement(locator=SEE_MORE)):
-				break
-			time.sleep(0.75)
-
-		locationLinks = []
-		for element in self.driver.find_elements_by_class_name(LOCATION_LINK):
-			locationLinks.append(element.get_attribute("href").replace(HOST + RELATIVE_URL_LOCATION, ""))
-		return locationLinks
-
 
 def scrapeCityToFile(dirPrefix, city, scraper):
 	path = dirPrefix + "Locations/" + city.replace("/","_") + "Locations.txt"
@@ -174,7 +184,7 @@ def scrapeCityToFile(dirPrefix, city, scraper):
 		file.write(loc+ "\n")
 	file.close()
 
-def scrapeLocationToFile(dirPrefix, location, date, timeWindow, scraper):
+def scrapeLocationToFile(dirPrefix, location, date, timeWindow, maxPosts, scraper):
 	if(date == "now"):
 		dateTo = datetime.utcnow()
 	else:
@@ -187,7 +197,7 @@ def scrapeLocationToFile(dirPrefix, location, date, timeWindow, scraper):
 
 	path = dirPrefix + "_Postcounts/" + location.replace("/","_") + "Postcounts.txt"
 	print("Scraping location " + location + " for number of pictures posted between " + str(dateFrom) + " and " + str(dateTo) + " to " + path)
-	numPosts = scraper.scrapeLocation(location=location, dateTo=dateTo, dateFrom=dateFrom)
+	numPosts = scraper.scrapeLocation(location, dateTo, dateFrom, maxPosts)
 
 	print(location + ": " + str(numPosts))
 	os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -195,29 +205,39 @@ def scrapeLocationToFile(dirPrefix, location, date, timeWindow, scraper):
 	file.write(dateTo.isoformat() + "\t" + str(numPosts) + "\n")
 	file.close()
 
+def getLinesInFile(filePath):
+	lines = []
+	try:
+		file = open(filePath, "r")
+	except FileNotFoundError:
+		print("File not found")
+		return
+	else:
+		lines.append(file.readline().strip('\n'))
+		while(lines[-1] != ""):
+			lines.append(file.readline().strip('\n'))
+		lines.pop()
+		file.close()
+	return lines
+
 def scrapeCitiesFromFile(filePath, dirPrefix, threadCount, scrapers):
-	lines = []
-	try:
-		file = open(filePath, "r")
-	except FileNotFoundError:
-		print("File not found")
-		return
-	else:
-		lines.append(file.readline().strip('\n'))
-		while(lines[-1] != ""):
-			lines.append(file.readline().strip('\n'))
-		lines.pop()
-		file.close()
+	cities = getLinesInFile(filePath)
+	scrapeCitiesFromList(cities, dirPrefix, threadCount, scrapers)
 
+def scrapeLocationsFromFile(filePath, dirPrefix, date, timeWindow, threadCount, maxPosts, scrapers):
+	locations = getLinesInFile(filePath)
+	scrapeLocationsFromList(locations, dirPrefix, date,timeWindow, threadCount, maxPosts, scrapers)
+
+def scrapeCitiesFromList(cityList, dirPrefix, threadCount, scrapers):
 	threads = []
 	i = 0
 	while(True):
 		if(threading.active_count() <= threadCount):
-			if(i == len(lines)):
+			if(i == len(cityList)):
 				break
 			for s in scrapers:
 				if(not s.inUse):
-					threads.append(ScrapeThread(target=scrapeCityToFile, args=(dirPrefix, lines[i], s)))
+					threads.append(ScrapeThread(target=scrapeCityToFile, args=(dirPrefix, cityList[i], s)))
 					threads[-1].start()
 					i += 1
 					break
@@ -226,29 +246,16 @@ def scrapeCitiesFromFile(filePath, dirPrefix, threadCount, scrapers):
 	for t in threads:
 		t.join()
 
-def scrapeLocationsFromFile(filePath, dirPrefix, date, timeWindow, threadCount, scrapers):
-	lines = []
-	try:
-		file = open(filePath, "r")
-	except FileNotFoundError:
-		print("File not found")
-		return
-	else:
-		lines.append(file.readline().strip('\n'))
-		while(lines[-1] != ""):
-			lines.append(file.readline().strip('\n'))
-		lines.pop()
-		file.close()
-
+def scrapeLocationsFromList(locList, dirPrefixes, date, timeWindow, threadCount, maxPosts, scrapers):
 	threads = []
 	i = 0
 	while(True):
 		if(threading.active_count() <= threadCount):
-			if(i == len(lines)):
+			if(i == len(locList)):
 				break
 			for s in scrapers:
 				if(not s.inUse):
-					threads.append(ScrapeThread(target=scrapeLocationToFile, args=(dirPrefix, lines[i], date, timeWindow, s)))
+					threads.append(ScrapeThread(target=scrapeLocationToFile, args=(dirPrefixes[i], locList[i], date, timeWindow, maxPosts, s)))
 					threads[-1].start()
 					i += 1
 					break
@@ -257,15 +264,19 @@ def scrapeLocationsFromFile(filePath, dirPrefix, date, timeWindow, threadCount, 
 	for t in threads:
 		t.join()
 
-def scrapeLocationsFromFolder(dirString, suffix, dirPrefix, date, timeWindow, threadCount, scrapers):
+def scrapeLocationsFromFolder(dirString, suffix, dirPrefix, date, timeWindow, threadCount, maxPosts, scrapers):
 	directory = os.fsencode(dirString)
+	locations = []
+	targetDirs = []
 	for file in os.listdir(directory):
 		fileName = os.fsdecode(file)
 		if(fileName.endswith(suffix)):
-			print("scraping locations in " + fileName)
-			targetFolder = dirPrefix + fileName.replace(suffix, "") #remove ending
+			print("getting locations in " + fileName)
+			targetDirs.append(dirPrefix + fileName.replace(suffix, "")) #remove ending
 			filePath = dirString + fileName
-			scrapeLocationsFromFile(filePath, targetFolder, date, timeWindow, threadCount, scrapers)
+			locations.extend(getLinesInFile(filePath))
+
+	scrapeLocationsFromList(locations, targetDirs, date, timeWindow, threadCount, maxPosts, scrapers)
 
 
 class ScrapeThread(threading.Thread):
@@ -299,6 +310,7 @@ def main():
 	parser.add_argument("-fromFile", default=["no", "no"], nargs=2, help="File containing a list of locations/cities to scrape, specify with c or l, eg. -list cities.txt c")
 	parser.add_argument("-threads", "--threadCount", type=int, default=1, help="how many threads to use")
 	parser.add_argument("-fromDir", type=str, default=("no", "no"), nargs=2, help="Directory containing files with lists of locations to scrape with suffix to specify which files to scrape, eg. -lDir ./data/Locations _Locations.txt")
+	parser.add_argument("-max", "--maxPosts", type=int, default=-1, help="maximum number of posts to scrape, eg. due to performance reasons")
 
 	args = parser.parse_args()
 	#  End Argparse #
@@ -313,7 +325,7 @@ def main():
 	if(args.fromDir[0] != "no"):
 		dirPath = args.fromDir[0]
 		fileSuffix = args.fromDir[1]
-		scrapeLocationsFromFolder(dirPath, fileSuffix, args.dirPrefix, args.date, args.timeWindow, args.threadCount, scrapers)
+		scrapeLocationsFromFolder(dirPath, fileSuffix, args.dirPrefix, args.date, args.timeWindow, args.threadCount, args.maxPosts, scrapers)
 
 	if((args.fromFile[0] != "no") and (args.fromFile[1] != "no")):
 		filePath = args.fromFile[0]
@@ -324,16 +336,16 @@ def main():
 		elif(typ == "l"):
 			cityName = filePath.split("/")[-1].replace("_Locations.txt", "") #folder with city name
 			dirPath = args.dirPrefix + cityName + "/"
-			scrapeLocationsFromFile(filePath, dirPath, args.date, args.timeWindow, args.threadCount, scrapers)
+			scrapeLocationsFromFile(filePath, dirPath, args.date, args.timeWindow, args.threadCount, args.maxPosts, scrapers)
 
 	if(args.city != "no"):
 		scrapeCityToFile(args.dirPrefix, args.city, scrapers[0])
 
 	if(args.location != "no"):
-		scrapeLocationToFile(args.dirPrefix, args.location, args.date, args.timeWindow, scrapers[0])
+		scrapeLocationToFile(args.dirPrefix, args.location, args.date, args.timeWindow, args.maxPosts, scrapers[0])
 
 	end = datetime.now()
-	print ("elapsed time: " + str(end - start))
+	print ("scraping time: " + str(end - start))
 
 	if(len(scrapers) > 0):
 		for s in scrapers:
