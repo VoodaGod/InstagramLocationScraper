@@ -64,7 +64,10 @@ class LocationScraper(object):
 			return 0 #no recent posts, only "top posts" or none
 		firstPostIndex = self.findFirstPost(dateFrom, postList)
 		lastPostIndex = self.findLastPost(dateTo, postList, firstPostIndex)
-		return (firstPostIndex - lastPostIndex)
+		if(len(postList) == (maxPosts + 9)): #didn't finish scrolling
+			return -(firstPostIndex - lastPostIndex) #negative = more than
+		else:
+			return (firstPostIndex - lastPostIndex)
 
 	def scrapeCity(self, city):
 		self.browseTargetPage(city)
