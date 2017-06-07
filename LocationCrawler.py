@@ -1,5 +1,4 @@
 import argparse
-from sys import platform
 import time
 from selenium import webdriver
 from selenium.webdriver.common.by import By
@@ -35,9 +34,10 @@ SCROLL_DOWN = "window.scrollTo(0, document.body.scrollHeight);"
 
 #path for the scraper profile
 CHROME_PROFILE_PATH = "./Scraper"
+CHROMEDRIVER_PATH = "./chromedriver.exe"
 
 class LocationScraper(object):
-	def __init__(self, profilePath=CHROME_PROFILE_PATH):
+	def __init__(self, profilePath, driverPath):
 		options = webdriver.ChromeOptions()
 		prefs = {"profile.managed_default_content_settings.images":2}
 		options.add_argument("user-data-dir=" + profilePath)
@@ -45,12 +45,11 @@ class LocationScraper(object):
 		options.add_argument('window-size=1200x600')
 		options.add_experimental_option("prefs", prefs)
 
-		if platform == "win32":
-			self.driver = webdriver.Chrome(executable_path="./chromedriverWIN.exe", chrome_options=options)
-		elif platform == "darwin":
-			self.driver = webdriver.Chrome(executable_path="./chromedriverMAC", chrome_options=options)
-		else:
-			print("neither Windows nor Mac detected")
+		try:
+			self.driver = webdriver.Chrome(executable_path=driverPath, chrome_options=options)
+		except:
+			print("failed to start driver at " + driverPath)
+			traceback.print_exc()
 
 		self.inUse = False
 
@@ -307,7 +306,16 @@ class ScrapeThread(threading.Thread):
 			print("")
 			self.scraper.inUse = False
 
+class ScraperStarterThread(threading.Thread):
+	def __init__(self, profilePath, driverPath,scrapers):
+		threading.Thread.__init__(self)
+		self.profilePath = profilePath
+		self.driverPath = driverPath
+		self.scrapers = scrapers
 
+	def run(self):
+		print("starting " + self.profilePath)
+		self.scrapers.append(LocationScraper(self.profilePath, self.driverPath))
 
 def main():
 	#   Arguments  #
@@ -317,18 +325,24 @@ def main():
 	parser.add_argument("-t", "--timeWindow", type=float, default=1.0, help="Timeframe to check number of posts in hours, eg. 1.0")
 	parser.add_argument("-c", "--city", type=str, default="no", help="City to scrape location links from, eg. c579270/ for Munich")
 	parser.add_argument("-dir", "--dirPrefix", type=str, default="./data/", help="directory to save results, default: ./data/")
-	parser.add_argument("-fromFile", default=["no", "no"], nargs=2, help="File containing a list of locations/cities to scrape, specify with c or l, eg. -list cities.txt c")
+	parser.add_argument("-fromFile", default=("no", "no"), nargs=2, help="File containing a list of locations/cities to scrape, specify with c or l, eg. -list cities.txt c")
 	parser.add_argument("-threads", "--threadCount", type=int, default=1, help="how many threads to use")
 	parser.add_argument("-fromDir", type=str, default=("no", "no"), nargs=2, help="Directory containing files with lists of locations to scrape with suffix to specify which files to scrape, eg. -lDir ./data/Locations _Locations.txt")
 	parser.add_argument("-max", "--maxPosts", type=int, default=-1, help="maximum number of posts to scrape, eg. due to performance reasons")
+	parser.add_argument("-drv", "--driverPath", type=str, default=CHROMEDRIVER_PATH, help=("path to chromedriver, default = " + CHROMEDRIVER_PATH))
 
 	args = parser.parse_args()
 	#  End Argparse #
 
 	scrapers = []
-	print("Starting Scrapers")
-	for i in range(len(scrapers), args.threadCount): #don't add more scrapers than threadCount
-		scrapers.append(LocationScraper(profilePath=CHROME_PROFILE_PATH + str(i)))
+	threads = []
+	for i in range(args.threadCount):
+		threads.append(ScraperStarterThread((CHROME_PROFILE_PATH + str(i)), CHROMEDRIVER_PATH, scrapers))
+		threads[-1].start()
+		#print("starting scraper " + str(i))
+		#scrapers.append(LocationScraper((CHROME_PROFILE_PATH + str(i)), args.driverPath))
+	for t in threads:
+		t.join()
 
 	start = datetime.now()
 
