@@ -1,5 +1,3 @@
-python LocationCrawler.py -fromDir ./data/24hCrawl1/ _Top30.txt -t 1 -threads 8 -max 2000 -d 2017-06-08T00:00:00
-python LocationCrawler.py -fromDir ./data/24hCrawl1/ _Top30.txt -t 1 -threads 8 -max 2000 -d 2017-06-08T01:00:00
 python LocationCrawler.py -fromDir ./data/24hCrawl1/ _Top30.txt -t 1 -threads 8 -max 2000 -d 2017-06-08T02:00:00
 python LocationCrawler.py -fromDir ./data/24hCrawl1/ _Top30.txt -t 1 -threads 8 -max 2000 -d 2017-06-08T03:00:00
 python LocationCrawler.py -fromDir ./data/24hCrawl1/ _Top30.txt -t 1 -threads 8 -max 2000 -d 2017-06-08T04:00:00
@@ -22,3 +20,5 @@ python LocationCrawler.py -fromDir ./data/24hCrawl1/ _Top30.txt -t 1 -threads 8 
 python LocationCrawler.py -fromDir ./data/24hCrawl1/ _Top30.txt -t 1 -threads 8 -max 2000 -d 2017-06-08T21:00:00
 python LocationCrawler.py -fromDir ./data/24hCrawl1/ _Top30.txt -t 1 -threads 8 -max 2000 -d 2017-06-08T22:00:00
 python LocationCrawler.py -fromDir ./data/24hCrawl1/ _Top30.txt -t 1 -threads 8 -max 2000 -d 2017-06-08T23:00:00
+python LocationCrawler.py -fromDir ./data/24hCrawl1/ _Top30.txt -t 1 -threads 8 -max 2000 -d 2017-06-09T00:00:00
+python LocationCrawler.py -fromDir ./data/24hCrawl1/ _Top30.txt -t 1 -threads 8 -max 2000 -d 2017-06-09T01:00:00

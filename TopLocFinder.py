@@ -17,7 +17,7 @@ def main():
 						locDict[subFile.replace("Postcounts.txt", "")] =  count
 				break
 			sortedLocs = sorted(locDict.items(), key=lambda x: int(x[1]), reverse=True)
-			topFile = open((subDir.replace("_Postcounts", "_Top") + str(numTop) + ".txt"), "w")
+			topFile = open((os.path.join(root, subDir).replace("_Postcounts", "_Top") + str(numTop) + ".txt"), "w")
 			topLocs = []
 			for i in range(min(len(sortedLocs), numTop)):
 				topLocs.append(sortedLocs[i][0].replace("_", "/") + "\n")
