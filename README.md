@@ -1,6 +1,7 @@
 
 # LocationCrawler
 A non API python program to scrape number of posts at a location, as well as locations in a city
+I am coding this for use in my Seminar "Computational Social Sciences" to acquire data for my group
 ### Full usage:
 ```
 usage: LocationCrawler.py [-h] [-d DATE] [-l LOCATION] [-t TIMEWINDOW]
