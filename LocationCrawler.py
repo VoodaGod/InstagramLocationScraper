@@ -2,6 +2,7 @@ import argparse
 import time
 from selenium import webdriver
 from selenium.webdriver.common.by import By
+from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.common.exceptions import TimeoutException, WebDriverException
@@ -42,25 +43,28 @@ class LocationScraper(object):
 		prefs = {"profile.managed_default_content_settings.images":2}
 		options.add_argument("user-data-dir=" + profilePath)
 		options.add_argument("headless")
-		options.add_argument('window-size=1200x600')
+		options.add_argument('window-size=1920x1080')
 		options.add_experimental_option("prefs", prefs)
 
 		try:
 			self.driver = webdriver.Chrome(executable_path=driverPath, chrome_options=options)
 		except:
 			print("failed to start driver at " + driverPath)
+			self.inUse = True #scraper with no driver is not ready to handle new job
 			traceback.print_exc()
 
-		self.inUse = False
+		self.inUse = False #if False, is ready to handle new job
 
 	def quit(self):
+		"""quit the driver"""
 		self.driver.quit()
 
 	def scrapeLocation(self, location, dateTo, dateFrom, maxPosts):
-		self.browseTargetPage(location)
+		"""return number of posts at location since dateFrom till dateTo, scrolling at most to maxPosts"""
+		self.browseLocationPage(location)
 		postList = self.scrollToDate(dateFrom, maxPosts)
-		if(len(postList) <= 9):
-			return 0 #no recent posts, only "top posts" or none
+		if(len(postList) <= 9): #no recent posts, only "top posts" or none
+			return 0
 		firstPostIndex = self.findFirstPost(dateFrom, postList)
 		lastPostIndex = self.findLastPost(dateTo, postList, firstPostIndex)
 		if(len(postList) == (maxPosts + 9)): #didn't finish scrolling
@@ -69,47 +73,59 @@ class LocationScraper(object):
 			return (firstPostIndex - lastPostIndex)
 
 	def scrapeCity(self, city):
-		self.browseTargetPage(city)
+		"""return list of relative urls of all locations in a city"""
+		self.browseLocationPage(city)
 		while(True):
 			self.driver.execute_script(SCROLL_DOWN)
 			time.sleep(0.1)
 			if(not self.clickElement(locator=SEE_MORE)):
 				break
-			time.sleep(0.75)
+			time.sleep(0.75) #seems to get duplicate elements when looping too fast
 
 		locationLinks = []
 		for element in self.driver.find_elements_by_class_name(LOCATION_LINK):
 			locationLinks.append(element.get_attribute("href").replace(HOST + RELATIVE_URL_LOCATION, ""))
 		return locationLinks
 
-	def browseTargetPage(self, location):
+	def browseLocationPage(self, location):
+		"""browses a page with partial url relative to location url"""
 		targetURL = HOST + RELATIVE_URL_LOCATION + location
 		self.driver.get(targetURL)
 
 	def clickElement(self, locator=(), element=None):
+		"""returns True if successfully clicked an element by locator or reference"""
 		el = None
-		try:
-			if(locator != ()):
-				el = WebDriverWait(self.driver, 10).until(EC.element_to_be_clickable(locator))
-				el.click()
-			elif(element != None):
+		try: #click normally
+			if(locator != ()): #by locator
+				try:
+					el = WebDriverWait(self.driver, 10).until(EC.presence_of_element_located(locator))
+					el.click()
+					time.sleep(0.1)
+					#webdriver.ActionChains(self.driver).send_keys_to_element(el, Keys.ENTER).perform()
+					return True
+				except TimeoutException:
+					return False
+			elif(element != None): #by element
 				el = element
 				el.click()
-			return True
-		except TimeoutException:
-			return False
-		except WebDriverException:
-			print("try clicking higher")
+				time.sleep(0.1)
+				return True
+			return False #nothing to click
+
+		except WebDriverException: #element wasn't clickable, try sending enter instead
 			try:
-				webdriver.ActionChains(self.driver).move_to_element_with_offset(el, 0, 20).click().perform()
+				if(el == None):
+					return False
+				webdriver.ActionChains(self.driver).send_keys_to_element(el, Keys.ENTER).perform()
+				time.sleep(0.1)
 				return True
 			except:
 				traceback.print_exc()
 				return False
-			print("ok")
 
-	#scrolls until an imager older than dateFrom is found
 	def scrollToDate(self, dateFrom, maxPosts):
+		"returns list of posts since dateFrom, scrolling at most to maxPosts"
+		self.clickElement(locator=(By.CLASS_NAME, "_8yoiv")) #email banner
 		self.driver.execute_script(SCROLL_DOWN)
 		loaded = False
 		prevLength = 0
@@ -118,52 +134,64 @@ class LocationScraper(object):
 			postList = self.driver.find_elements_by_class_name(POST)
 			if(len(postList) < 9):
 				return [] #no recent posts, only "top posts" or none
-			if(not (len(postList) > prevLength)):
+			if(not (len(postList) > prevLength)): #no new posts loaded yet
 				self.driver.execute_script(SCROLL_DOWN)
 				scrollCounter += 1
 				time.sleep(0.25)
-				if(scrollCounter > 10):
+				if(scrollCounter > 10): #probably at end of list
 					return postList
 				else:
 					continue
 			else:
 				scrollCounter = 0
 			prevLength = len(postList)
-			if(maxPosts >= 0):
+			if(maxPosts >= 0): #return at most maxPost many recent posts
 				while(len(postList) > (maxPosts + 9)):
 					postList.pop()
 				if(len(postList) == (maxPosts + 9)):
 					return postList
-			self.clickElement(element=postList[-1])
-			dateElement = WebDriverWait(self.driver, 10).until(EC.presence_of_element_located(DATE))
+
+			#if last element is older than dateFrom, return postList
+			if (not self.clickElement(element=postList[-1])):
+				self.clickElement(locator=CLOSE_BUTTON)
+				continue
+			try:
+				dateElement = WebDriverWait(self.driver, 10).until(EC.presence_of_element_located(DATE))
+			except TimeoutException:
+				print("couldn't locate date element")
+				continue
 			date = dateutil.parser.parse(dateElement.get_attribute("datetime"), ignoretz=True)
 			self.clickElement(locator=CLOSE_BUTTON)
 			if(date <= dateFrom):
 				return postList
 			self.driver.execute_script(SCROLL_DOWN)
-			if(not loaded):
+			if(not loaded): #haven't clicked "load more" yet
 				self.clickElement(LOAD_MORE)
 				loaded = True
 
 	def binaryDateSearch(self, dateCmp, postList, left, right):
+		"""return index for dateCmp in postList between left & right"""
 		while(True):
 			middle = int((left + right) / 2)
 			self.clickElement(element=postList[middle])
 			try:
 				dateElement = WebDriverWait(self.driver, 10).until(EC.presence_of_element_located(DATE))
 			except TimeoutException:
-				print("couldn't locate date element")
-				return 0
+				self.clickElement(locator=CLOSE_BUTTON)
+				continue
 			date = dateutil.parser.parse(dateElement.get_attribute("datetime"), ignoretz=True)
 			self.clickElement(locator=CLOSE_BUTTON)
-			if(date > dateCmp):
+			if(date == dateCmp):
+				return middle
+			elif(date > dateCmp):
 				left = middle + 1
 			elif(date < dateCmp):
 				right = middle - 1
-			if(right < left):
+			if(right < left): #not sure why return left seems to work
 				return left
 
 	def findFirstPost(self, dateFrom, postList):
+		"""returns index of first post in postList after dateFrom"""
 		#binary search on last 12 loaded posts, as posts[-13] is younger than dateFrom
 		if((len(postList) - 9) < 12):
 			left = 9 #no full page of most recent with 12 posts
@@ -174,7 +202,8 @@ class LocationScraper(object):
 		return match
 
 	def findLastPost(self, dateTo, postList, firstPostIndex):
-		#binary search
+		"""returns last post in postList before dateTo"""
+		#binary search between newest post & firstPostIndex
 		left = 9 #first 9 posts are "top posts"
 		right = firstPostIndex
 		match = self.binaryDateSearch(dateTo, postList, left, right)
@@ -299,6 +328,7 @@ class ScrapeThread(threading.Thread):
 	def run(self):
 		try:
 			self.target(*self.args)
+			self.scraper.driver.get("about:blank")
 			self.scraper.inUse = False
 		except:
 			print("\nException in: " + self.name + ", " + self.args[1])
@@ -339,12 +369,11 @@ def main():
 	for i in range(args.threadCount):
 		threads.append(ScraperStarterThread((CHROME_PROFILE_PATH + str(i)), CHROMEDRIVER_PATH, scrapers))
 		threads[-1].start()
-		#print("starting scraper " + str(i))
-		#scrapers.append(LocationScraper((CHROME_PROFILE_PATH + str(i)), args.driverPath))
-	for t in threads:
-		t.join()
 
 	start = datetime.now()
+
+	for t in threads:
+		t.join()
 
 	if(args.fromDir[0] != "no"):
 		dirPath = args.fromDir[0]
