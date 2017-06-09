@@ -5,7 +5,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
-from selenium.common.exceptions import TimeoutException, WebDriverException
+from selenium.common.exceptions import TimeoutException, WebDriverException, StaleElementReferenceException
 from datetime import datetime
 from datetime import timedelta
 import dateutil.parser
@@ -36,6 +36,8 @@ SCROLL_DOWN = "window.scrollTo(0, document.body.scrollHeight);"
 #path for the scraper profile
 CHROME_PROFILE_PATH = "./Scraper"
 CHROMEDRIVER_PATH = "./chromedriver.exe"
+
+MAX_WAIT = 20
 
 class LocationScraper(object):
 	def __init__(self, profilePath, driverPath):
@@ -80,7 +82,7 @@ class LocationScraper(object):
 			time.sleep(0.1)
 			if(not self.clickElement(locator=SEE_MORE)):
 				break
-			time.sleep(0.75) #seems to get duplicate elements when looping too fast
+			time.sleep(1) #seems to get duplicate elements when looping too fast
 
 		locationLinks = []
 		for element in self.driver.find_elements_by_class_name(LOCATION_LINK):
@@ -93,39 +95,56 @@ class LocationScraper(object):
 		self.driver.get(targetURL)
 
 	def clickElement(self, locator=(), element=None):
-		"""returns True if successfully clicked an element by locator or reference"""
+		"""returns True if successfully clicked an element by locator or reference,
+		raises StaleElementReferenceException if element not currently located on page"""
 		el = None
 		try: #click normally
 			if(locator != ()): #by locator
 				try:
-					el = WebDriverWait(self.driver, 10).until(EC.presence_of_element_located(locator))
+					el = WebDriverWait(self.driver, MAX_WAIT).until(EC.presence_of_element_located(locator))
 					el.click()
-					time.sleep(0.1)
+					time.sleep(0.2)
 					#webdriver.ActionChains(self.driver).send_keys_to_element(el, Keys.ENTER).perform()
 					return True
 				except TimeoutException:
 					return False
 			elif(element != None): #by element
-				el = element
-				el.click()
-				time.sleep(0.1)
-				return True
+				try:
+					waitTime = 0
+					while((EC.staleness_of(element)) and (waitTime < MAX_WAIT)):
+						waitTime += 0.1
+						time.sleep(0.1)
+					el = element
+					el.click()
+					time.sleep(0.2)
+					return True
+				except StaleElementReferenceException:
+					raise
 			return False #nothing to click
+
+		except StaleElementReferenceException:
+			raise
 
 		except WebDriverException: #element wasn't clickable, try sending enter instead
 			try:
 				if(el == None):
 					return False
 				webdriver.ActionChains(self.driver).send_keys_to_element(el, Keys.ENTER).perform()
-				time.sleep(0.1)
+				time.sleep(0.2)
 				return True
+			except StaleElementReferenceException:
+				raise
 			except:
 				traceback.print_exc()
 				return False
 
+
 	def scrollToDate(self, dateFrom, maxPosts):
 		"returns list of posts since dateFrom, scrolling at most to maxPosts"
-		self.clickElement(locator=(By.CLASS_NAME, "_8yoiv")) #email banner
+		try:
+			self.clickElement(locator=(By.CLASS_NAME, "_8yoiv")) #email banner
+		except StaleElementReferenceException:
+			pass
 		self.driver.execute_script(SCROLL_DOWN)
 		loaded = False
 		prevLength = 0
@@ -151,12 +170,15 @@ class LocationScraper(object):
 				if(len(postList) == (maxPosts + 9)):
 					return postList
 
-			#if last element is older than dateFrom, return postList
-			if (not self.clickElement(element=postList[-1])):
-				self.clickElement(locator=CLOSE_BUTTON)
-				continue
+			#check if last post is older than dateFrom, then return postList
 			try:
-				dateElement = WebDriverWait(self.driver, 10).until(EC.presence_of_element_located(DATE))
+				self.clickElement(element=postList[-1])
+			except StaleElementReferenceException: #post not on current page
+				if(not self.clickElement(locator=CLOSE_BUTTON)):
+					print("could click neither post nor closeButton")
+				continue #clicked close button, try clicking post again
+			try:
+				dateElement = WebDriverWait(self.driver, MAX_WAIT).until(EC.presence_of_element_located(DATE))
 			except TimeoutException:
 				print("couldn't locate date element")
 				continue
@@ -173,11 +195,16 @@ class LocationScraper(object):
 		"""return index for dateCmp in postList between left & right"""
 		while(True):
 			middle = int((left + right) / 2)
-			self.clickElement(element=postList[middle])
 			try:
-				dateElement = WebDriverWait(self.driver, 10).until(EC.presence_of_element_located(DATE))
+				self.clickElement(element=postList[middle])
+			except StaleElementReferenceException: #post not on current page
+				if(not self.clickElement(locator=CLOSE_BUTTON)):
+					print("could click neither post nor closeButton")
+				continue #clicked close button, try clicking post again
+			try:
+				dateElement = WebDriverWait(self.driver, MAX_WAIT).until(EC.presence_of_element_located(DATE))
 			except TimeoutException:
-				self.clickElement(locator=CLOSE_BUTTON)
+				print("couldn't locate date element")
 				continue
 			date = dateutil.parser.parse(dateElement.get_attribute("datetime"), ignoretz=True)
 			self.clickElement(locator=CLOSE_BUTTON)
@@ -211,6 +238,7 @@ class LocationScraper(object):
 
 
 def scrapeCityToFile(dirPrefix, city, scraper):
+	"""scrapes locations at relative city url to a file in dirPrefix"""
 	path = dirPrefix + "Locations/" + city.replace("/","_") + "Locations.txt"
 	print("scraping city: " + city + " for locations to " + path)
 	locations = scraper.scrapeCity(city)
@@ -222,6 +250,7 @@ def scrapeCityToFile(dirPrefix, city, scraper):
 	file.close()
 
 def scrapeLocationToFile(dirPrefix, location, date, timeWindow, maxPosts, scraper):
+	"""scrapes postcount of location in timeWindow before date, scrolling to a maximum of maxPosts, date needs to be parseable by dateutil, e.g 2017-06-09T20:00:00"""
 	if(date == "now"):
 		dateTo = datetime.utcnow()
 	else:
@@ -229,10 +258,10 @@ def scrapeLocationToFile(dirPrefix, location, date, timeWindow, maxPosts, scrape
 	dateFrom = dateTo - timedelta(hours=timeWindow)
 	if(dateTo > datetime.utcnow()):
 		print("waiting until " + dateTo.isoformat())
-		while(dateTo > datetime.utcnow()):
+		while(dateTo > datetime.utcnow()): #wait until date has passed
 			time.sleep(10)
 
-	path = dirPrefix + "_Postcounts/" + location.replace("/","_") + "Postcounts.txt"
+	path = dirPrefix + "_Postcounts/" + location.replace("/","_") + "Postcounts.txt" #which file to write to
 	print("Scraping location " + location + " for number of pictures posted between " + str(dateFrom) + " and " + str(dateTo) + " to " + path)
 	numPosts = scraper.scrapeLocation(location, dateTo, dateFrom, maxPosts)
 
@@ -243,6 +272,7 @@ def scrapeLocationToFile(dirPrefix, location, date, timeWindow, maxPosts, scrape
 	file.close()
 
 def getLinesInFile(filePath):
+	"""returns list of lines in file at filePath"""
 	lines = []
 	try:
 		file = open(filePath, "r")
@@ -258,14 +288,17 @@ def getLinesInFile(filePath):
 	return lines
 
 def scrapeCitiesFromFile(filePath, dirPrefix, threadCount, scrapers):
+	"""scrapes all locations in cities in file at filePath, saves to dirPrefix, spawns threadCount threads"""
 	cities = getLinesInFile(filePath)
 	scrapeCitiesFromList(cities, dirPrefix, threadCount, scrapers)
 
 def scrapeLocationsFromFile(filePath, dirPrefix, date, timeWindow, threadCount, maxPosts, scrapers):
+	"""scrapes postcounts from locations in file at filePath in timeWindow before date, saves them to dirPrefix,spawns threadCount threads, and scrolls to maximum of maxPosts posts"""
 	locations = getLinesInFile(filePath)
 	scrapeLocationsFromList(locations, dirPrefix, date,timeWindow, threadCount, maxPosts, scrapers)
 
 def scrapeCitiesFromList(cityList, dirPrefix, threadCount, scrapers):
+	"""scrapes locations in cities in cityList to file in dirPrefix, spawns threadCount threads"""
 	threads = []
 	i = 0
 	while(True):
@@ -284,11 +317,13 @@ def scrapeCitiesFromList(cityList, dirPrefix, threadCount, scrapers):
 		t.join()
 
 def scrapeLocationsFromList(locList, dirPrefixes, date, timeWindow, threadCount, maxPosts, scrapers):
+	"""scrapes postscounts at locations in locList in timeWindow before date, spawning threadCount threads, scrolling to maximum of maxPosts"""
 	threads = []
 	i = 0
 	while(True):
+		#start a new thread if fewer than threadCount active
 		if(threading.active_count() <= threadCount):
-			if(i == len(locList)):
+			if(i == len(locList)): #don't start more threads than locations
 				break
 			for s in scrapers:
 				if(not s.inUse):
@@ -302,6 +337,7 @@ def scrapeLocationsFromList(locList, dirPrefixes, date, timeWindow, threadCount,
 		t.join()
 
 def scrapeLocationsFromFolder(dirString, suffix, dirPrefix, date, timeWindow, threadCount, maxPosts, scrapers):
+	"""scrape postcounts at locations listed in files having suffix in dirString in timeWindow before date to dirPrefix, spawning threadCount threads, scrolling to maximum of maxPosts"""
 	directory = os.fsencode(dirString)
 	locations = []
 	targetDirs = []
@@ -318,6 +354,7 @@ def scrapeLocationsFromFolder(dirString, suffix, dirPrefix, date, timeWindow, th
 
 
 class ScrapeThread(threading.Thread):
+	"""runs scraping function target(args) in own scraper instance"""
 	def __init__(self, target, args):
 		threading.Thread.__init__(self)
 		self.target = target
@@ -329,14 +366,15 @@ class ScrapeThread(threading.Thread):
 		try:
 			self.target(*self.args)
 			self.scraper.driver.get("about:blank")
-			self.scraper.inUse = False
 		except:
 			print("\nException in: " + self.name + ", " + self.args[1])
 			traceback.print_exc()
 			print("")
-			self.scraper.inUse = False
+		finally:
+			self.scraper.inUse = False #scraper can be used by next thread
 
 class ScraperStarterThread(threading.Thread):
+	"""starts scraper instance with profile at profilePath and driver at driverPath"""
 	def __init__(self, profilePath, driverPath,scrapers):
 		threading.Thread.__init__(self)
 		self.profilePath = profilePath
@@ -366,12 +404,14 @@ def main():
 
 	scrapers = []
 	threads = []
+	#start scrapers concurrently
 	for i in range(args.threadCount):
 		threads.append(ScraperStarterThread((CHROME_PROFILE_PATH + str(i)), CHROMEDRIVER_PATH, scrapers))
 		threads[-1].start()
 
 	start = datetime.now()
 
+	#wait for all scrapers to finish starting
 	for t in threads:
 		t.join()
 
