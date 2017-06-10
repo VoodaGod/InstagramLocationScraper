@@ -20,14 +20,15 @@ RELATIVE_URL_LOCATION = "/explore/locations/"
 DEFAULT_URL = "about:blank"
 
 #Element locators
-LOAD_MORE = (By.CSS_SELECTOR, "a._8imhp._glz1g")
-DATE = (By.CSS_SELECTOR, "time")
-CLOSE_BUTTON = (By.CLASS_NAME, "_3eajp")
-SEE_MORE = (By.CLASS_NAME, "_jn623")
+#LOC_LOAD_MORE = (By.CSS_SELECTOR, "a._8imhp._glz1g") #clicking on last post automatically loads more
+LOC_DATE = (By.CSS_SELECTOR, "time")
+LOC_CLOSE_BUTTON = (By.CLASS_NAME, "_3eajp")
+LOC_SEE_MORE = (By.CLASS_NAME, "_jn623")
+LOC_EMAIL_BANNER = (By.CLASS_NAME, "_8yoiv")
 
 #Class names
-LOCATION_LINK = "_3hq20"
-POST = "_ovg3g"
+CLASS_LOCATION_LINK = "_3hq20"
+CLASS_POST = "_ovg3g"
 
 # JAVASCRIPT COMMANDS
 SCROLL_UP = "window.scrollTo(0, 0);"
@@ -37,7 +38,7 @@ SCROLL_DOWN = "window.scrollTo(0, document.body.scrollHeight);"
 CHROME_PROFILE_PATH = "./Scraper"
 CHROMEDRIVER_PATH = "./chromedriver.exe"
 
-MAX_WAIT = 20
+MAX_WAIT = 7
 
 class LocationScraper(object):
 	def __init__(self, profilePath, driverPath):
@@ -56,23 +57,42 @@ class LocationScraper(object):
 			traceback.print_exc()
 
 		self.inUse = False #if False, is ready to handle new job
+		self.BannerClosed = False
 
 	def quit(self):
 		"""quit the driver"""
 		self.driver.quit()
 
+	class PageNotFoundException(Exception):
+		"""raise when Instagram can't find a post"""
+
 	def scrapeLocation(self, location, dateTo, dateFrom, maxPosts):
 		"""return number of posts at location since dateFrom till dateTo, scrolling at most to maxPosts"""
-		self.browseLocationPage(location)
-		postList = self.scrollToDate(dateFrom, maxPosts)
-		if(len(postList) <= 9): #no recent posts, only "top posts" or none
-			return 0
-		firstPostIndex = self.findFirstPost(dateFrom, postList)
-		lastPostIndex = self.findLastPost(dateTo, postList, firstPostIndex)
-		if(len(postList) == (maxPosts + 9)): #didn't finish scrolling
-			return -(firstPostIndex - lastPostIndex) #negative = more than
-		else:
-			return (firstPostIndex - lastPostIndex)
+		attempts = 0
+		while (attempts < 3): #have to restart scrape if clicked on deleted post
+			try:
+				self.browseLocationPage(location)
+				if(not self.BannerClosed): #only need to close banner once
+					try:
+						self.clickElement(locator=LOC_EMAIL_BANNER)
+					except StaleElementReferenceException:
+						pass
+					finally:
+						self.BannerClosed = True
+
+				postList = self.scrollToDate(dateFrom, maxPosts)
+				if(len(postList) <= 9): #no recent posts, only "top posts" or none
+					return 0
+				firstPostIndex = self.findFirstPost(dateFrom, postList)
+				lastPostIndex = self.findLastPost(dateTo, postList, firstPostIndex)
+				if(len(postList) == (maxPosts + 9)): #didn't finish scrolling
+					return -(firstPostIndex - lastPostIndex) #negative = more than
+				else:
+					return (firstPostIndex - lastPostIndex)
+			except self.PageNotFoundException:
+				print("\nrestarting scrape of " + location + ", attempt " + str(attempts + 1) + "\n")
+				attempts += 1
+
 
 	def scrapeCity(self, city):
 		"""return list of relative urls of all locations in a city"""
@@ -80,12 +100,12 @@ class LocationScraper(object):
 		while(True):
 			self.driver.execute_script(SCROLL_DOWN)
 			time.sleep(0.1)
-			if(not self.clickElement(locator=SEE_MORE)):
+			if(not self.clickElement(locator=LOC_SEE_MORE)):
 				break
 			time.sleep(1) #seems to get duplicate elements when looping too fast
 
 		locationLinks = []
-		for element in self.driver.find_elements_by_class_name(LOCATION_LINK):
+		for element in self.driver.find_elements_by_class_name(CLASS_LOCATION_LINK):
 			locationLinks.append(element.get_attribute("href").replace(HOST + RELATIVE_URL_LOCATION, ""))
 		return locationLinks
 
@@ -97,32 +117,32 @@ class LocationScraper(object):
 	def clickElement(self, locator=(), element=None):
 		"""returns True if successfully clicked an element by locator or reference,
 		raises StaleElementReferenceException if element not currently located on page"""
+		waitAfterClick = 0.1
 		el = None
 		try: #click normally
 			if(locator != ()): #by locator
-				try:
+				try: #try finding & clicking it
 					el = WebDriverWait(self.driver, MAX_WAIT).until(EC.presence_of_element_located(locator))
-					el.click()
-					time.sleep(0.2)
-					#webdriver.ActionChains(self.driver).send_keys_to_element(el, Keys.ENTER).perform()
+					el.click() #raises WebDriverException if element not clickable
+					time.sleep(waitAfterClick)
 					return True
-				except TimeoutException:
+				except TimeoutException: #not found
 					return False
 			elif(element != None): #by element
-				try:
-					waitTime = 0
-					while((EC.staleness_of(element)) and (waitTime < MAX_WAIT)):
-						waitTime += 0.1
-						time.sleep(0.1)
-					el = element
-					el.click()
-					time.sleep(0.2)
+				el = element
+				try: #if element is on page, try to click it
+					try:#check if element is on current page
+						WebDriverWait(self.driver, MAX_WAIT).until_not(EC.staleness_of(element))
+					except TimeoutException: #if it's not
+						raise StaleElementReferenceException
+					el.click() #raises WebDriverException if element not clickable
+					time.sleep(waitAfterClick)
 					return True
-				except StaleElementReferenceException:
+				except (StaleElementReferenceException, WebDriverException): #handle below
 					raise
 			return False #nothing to click
 
-		except StaleElementReferenceException:
+		except StaleElementReferenceException: #handle outside
 			raise
 
 		except WebDriverException: #element wasn't clickable, try sending enter instead
@@ -130,33 +150,25 @@ class LocationScraper(object):
 				if(el == None):
 					return False
 				webdriver.ActionChains(self.driver).send_keys_to_element(el, Keys.ENTER).perform()
-				time.sleep(0.2)
+				time.sleep(waitAfterClick)
 				return True
-			except StaleElementReferenceException:
+			except StaleElementReferenceException: #element not on current page
 				raise
-			except:
-				traceback.print_exc()
-				return False
 
 
 	def scrollToDate(self, dateFrom, maxPosts):
 		"returns list of posts since dateFrom, scrolling at most to maxPosts"
-		try:
-			self.clickElement(locator=(By.CLASS_NAME, "_8yoiv")) #email banner
-		except StaleElementReferenceException:
-			pass
 		self.driver.execute_script(SCROLL_DOWN)
-		loaded = False
 		prevLength = 0
 		scrollCounter = 0
 		while(True):
-			postList = self.driver.find_elements_by_class_name(POST)
+			postList = self.driver.find_elements_by_class_name(CLASS_POST)
 			if(len(postList) < 9):
 				return [] #no recent posts, only "top posts" or none
 			if(not (len(postList) > prevLength)): #no new posts loaded yet
 				self.driver.execute_script(SCROLL_DOWN)
 				scrollCounter += 1
-				time.sleep(0.25)
+				time.sleep(0.3)
 				if(scrollCounter > 10): #probably at end of list
 					return postList
 				else:
@@ -171,25 +183,23 @@ class LocationScraper(object):
 					return postList
 
 			#check if last post is older than dateFrom, then return postList
-			try:
+			try: #click on last post
 				self.clickElement(element=postList[-1])
 			except StaleElementReferenceException: #post not on current page
-				if(not self.clickElement(locator=CLOSE_BUTTON)):
-					print("could click neither post nor closeButton")
+				if(not self.clickElement(locator=LOC_CLOSE_BUTTON)):
+					if(self.driver.title == "Page Not Found • Instagram"):
+						raise self.PageNotFoundException #post was deleted
 				continue #clicked close button, try clicking post again
 			try:
-				dateElement = WebDriverWait(self.driver, MAX_WAIT).until(EC.presence_of_element_located(DATE))
+				dateElement = WebDriverWait(self.driver, MAX_WAIT).until(EC.presence_of_element_located(LOC_DATE))
 			except TimeoutException:
-				print("couldn't locate date element")
+				print("couldn't locate date element at " + self.driver.title + " @ " + self.driver.current_url)
 				continue
 			date = dateutil.parser.parse(dateElement.get_attribute("datetime"), ignoretz=True)
-			self.clickElement(locator=CLOSE_BUTTON)
-			if(date <= dateFrom):
+			self.clickElement(locator=LOC_CLOSE_BUTTON)
+			if(date <= dateFrom): #post is older than dateFrom
 				return postList
 			self.driver.execute_script(SCROLL_DOWN)
-			if(not loaded): #haven't clicked "load more" yet
-				self.clickElement(LOAD_MORE)
-				loaded = True
 
 	def binaryDateSearch(self, dateCmp, postList, left, right):
 		"""return index for dateCmp in postList between left & right"""
@@ -198,16 +208,18 @@ class LocationScraper(object):
 			try:
 				self.clickElement(element=postList[middle])
 			except StaleElementReferenceException: #post not on current page
-				if(not self.clickElement(locator=CLOSE_BUTTON)):
-					print("could click neither post nor closeButton")
+				if(not self.clickElement(locator=LOC_CLOSE_BUTTON)):
+					#postList = self.driver.find_elements_by_class_name(CLASS_POST)
+					if(self.driver.title == "Page Not Found • Instagram"):
+						raise self.PageNotFoundException
 				continue #clicked close button, try clicking post again
 			try:
-				dateElement = WebDriverWait(self.driver, MAX_WAIT).until(EC.presence_of_element_located(DATE))
+				dateElement = WebDriverWait(self.driver, MAX_WAIT).until(EC.presence_of_element_located(LOC_DATE))
 			except TimeoutException:
-				print("couldn't locate date element")
+				print("couldn't locate date element at " + self.driver.title + " @ " + self.driver.current_url)
 				continue
 			date = dateutil.parser.parse(dateElement.get_attribute("datetime"), ignoretz=True)
-			self.clickElement(locator=CLOSE_BUTTON)
+			self.clickElement(locator=LOC_CLOSE_BUTTON)
 			if(date == dateCmp):
 				return middle
 			elif(date > dateCmp):
@@ -242,7 +254,7 @@ def scrapeCityToFile(dirPrefix, city, scraper):
 	path = dirPrefix + "Locations/" + city.replace("/","_") + "Locations.txt"
 	print("scraping city: " + city + " for locations to " + path)
 	locations = scraper.scrapeCity(city)
-
+	#write to file
 	os.makedirs(os.path.dirname(path), exist_ok=True)
 	file = open(path, "w")
 	for loc in locations:
@@ -251,6 +263,7 @@ def scrapeCityToFile(dirPrefix, city, scraper):
 
 def scrapeLocationToFile(dirPrefix, location, date, timeWindow, maxPosts, scraper):
 	"""scrapes postcount of location in timeWindow before date, scrolling to a maximum of maxPosts, date needs to be parseable by dateutil, e.g 2017-06-09T20:00:00"""
+	#parse dates
 	if(date == "now"):
 		dateTo = datetime.utcnow()
 	else:
@@ -261,10 +274,10 @@ def scrapeLocationToFile(dirPrefix, location, date, timeWindow, maxPosts, scrape
 		while(dateTo > datetime.utcnow()): #wait until date has passed
 			time.sleep(10)
 
+	#scrape & write to file
 	path = dirPrefix + "_Postcounts/" + location.replace("/","_") + "Postcounts.txt" #which file to write to
 	print("Scraping location " + location + " for number of pictures posted between " + str(dateFrom) + " and " + str(dateTo) + " to " + path)
 	numPosts = scraper.scrapeLocation(location, dateTo, dateFrom, maxPosts)
-
 	print(location + ": " + str(numPosts))
 	os.makedirs(os.path.dirname(path), exist_ok=True)
 	file = open(path, "a+")
@@ -325,14 +338,15 @@ def scrapeLocationsFromList(locList, dirPrefixes, date, timeWindow, threadCount,
 		if(threading.active_count() <= threadCount):
 			if(i == len(locList)): #don't start more threads than locations
 				break
-			for s in scrapers:
+			for s in scrapers: #find a free scraper
 				if(not s.inUse):
 					threads.append(ScrapeThread(target=scrapeLocationToFile, args=(dirPrefixes[i], locList[i], date, timeWindow, maxPosts, s)))
 					threads[-1].start()
 					i += 1
 					break
-		time.sleep(0.5)
+		time.sleep(1)
 
+	#once all threads started, wait for them to finish
 	for t in threads:
 		t.join()
 
@@ -386,62 +400,66 @@ class ScraperStarterThread(threading.Thread):
 		self.scrapers.append(LocationScraper(self.profilePath, self.driverPath))
 
 def main():
-	#   Arguments  #
-	parser = argparse.ArgumentParser(description="Instagram Location Scraper")
-	parser.add_argument("-d", "--date", type=str, default="now", help="Date up till which to scrape, eg. 2017-06-01T10:00:00")
-	parser.add_argument("-l", "--location", type=str, default="no", help="Location Number to scrape, eg. 214335386/ for Englischer Garten")
-	parser.add_argument("-t", "--timeWindow", type=float, default=1.0, help="Timeframe to check number of posts in hours, eg. 1.0")
-	parser.add_argument("-c", "--city", type=str, default="no", help="City to scrape location links from, eg. c579270/ for Munich")
-	parser.add_argument("-dir", "--dirPrefix", type=str, default="./data/", help="directory to save results, default: ./data/")
-	parser.add_argument("-fromFile", default=("no", "no"), nargs=2, help="File containing a list of locations/cities to scrape, specify with c or l, eg. -list cities.txt c")
-	parser.add_argument("-threads", "--threadCount", type=int, default=1, help="how many threads to use")
-	parser.add_argument("-fromDir", type=str, default=("no", "no"), nargs=2, help="Directory containing files with lists of locations to scrape with suffix to specify which files to scrape, eg. -lDir ./data/Locations _Locations.txt")
-	parser.add_argument("-max", "--maxPosts", type=int, default=-1, help="maximum number of posts to scrape, eg. due to performance reasons")
-	parser.add_argument("-drv", "--driverPath", type=str, default=CHROMEDRIVER_PATH, help=("path to chromedriver, default = " + CHROMEDRIVER_PATH))
+	try:
+		#   Arguments  #
+		parser = argparse.ArgumentParser(description="Instagram Location Scraper")
+		parser.add_argument("-d", "--date", type=str, default="now", help="Date up till which to scrape, eg. 2017-06-01T10:00:00")
+		parser.add_argument("-l", "--location", type=str, default="no", help="Location Number to scrape, eg. 214335386/ for Englischer Garten")
+		parser.add_argument("-t", "--timeWindow", type=float, default=1.0, help="Timeframe to check number of posts in hours, eg. 1.0")
+		parser.add_argument("-c", "--city", type=str, default="no", help="City to scrape location links from, eg. c579270/ for Munich")
+		parser.add_argument("-dir", "--dirPrefix", type=str, default="./data/", help="directory to save results, default: ./data/")
+		parser.add_argument("-fromFile", default=("no", "no"), nargs=2, help="File containing a list of locations/cities to scrape, specify with c or l, eg. -list cities.txt c")
+		parser.add_argument("-threads", "--threadCount", type=int, default=1, help="how many threads to use")
+		parser.add_argument("-fromDir", type=str, default=("no", "no"), nargs=2, help="Directory containing files with lists of locations to scrape with suffix to specify which files to scrape, eg. -lDir ./data/Locations _Locations.txt")
+		parser.add_argument("-max", "--maxPosts", type=int, default=-1, help="maximum number of posts to scrape, eg. due to performance reasons")
+		parser.add_argument("-drv", "--driverPath", type=str, default=CHROMEDRIVER_PATH, help=("path to chromedriver, default = " + CHROMEDRIVER_PATH))
 
-	args = parser.parse_args()
-	#  End Argparse #
+		args = parser.parse_args()
+		#  End Argparse #
 
-	scrapers = []
-	threads = []
-	#start scrapers concurrently
-	for i in range(args.threadCount):
-		threads.append(ScraperStarterThread((CHROME_PROFILE_PATH + str(i)), CHROMEDRIVER_PATH, scrapers))
-		threads[-1].start()
+		scrapers = []
+		threads = []
+		#start scrapers concurrently
+		for i in range(args.threadCount):
+			threads.append(ScraperStarterThread((CHROME_PROFILE_PATH + str(i)), CHROMEDRIVER_PATH, scrapers))
+			threads[-1].start()
 
-	start = datetime.now()
+		start = datetime.now()
 
-	#wait for all scrapers to finish starting
-	for t in threads:
-		t.join()
+		#wait for all scrapers to finish starting
+		for t in threads:
+			t.join()
 
-	if(args.fromDir[0] != "no"):
-		dirPath = args.fromDir[0]
-		fileSuffix = args.fromDir[1]
-		scrapeLocationsFromFolder(dirPath, fileSuffix, args.dirPrefix, args.date, args.timeWindow, args.threadCount, args.maxPosts, scrapers)
+		if(args.fromDir[0] != "no"):
+			dirPath = args.fromDir[0]
+			fileSuffix = args.fromDir[1]
+			scrapeLocationsFromFolder(dirPath, fileSuffix, args.dirPrefix, args.date, args.timeWindow, args.threadCount, args.maxPosts, scrapers)
 
-	if((args.fromFile[0] != "no") and (args.fromFile[1] != "no")):
-		filePath = args.fromFile[0]
-		typ = args.fromFile[1]
-		if(typ == "c"):
-			path = args.dirPrefix
-			scrapeCitiesFromFile(filePath, path, args.threadCount, scrapers)
-		elif(typ == "l"):
-			cityName = filePath.split("/")[-1].replace("_Locations.txt", "") #folder with city name
-			dirPath = args.dirPrefix + cityName + "/"
-			scrapeLocationsFromFile(filePath, dirPath, args.date, args.timeWindow, args.threadCount, args.maxPosts, scrapers)
+		if((args.fromFile[0] != "no") and (args.fromFile[1] != "no")):
+			filePath = args.fromFile[0]
+			typ = args.fromFile[1]
+			if(typ == "c"):
+				path = args.dirPrefix
+				scrapeCitiesFromFile(filePath, path, args.threadCount, scrapers)
+			elif(typ == "l"):
+				cityName = filePath.split("/")[-1].replace("_Locations.txt", "") #folder with city name
+				dirPath = args.dirPrefix + cityName + "/"
+				scrapeLocationsFromFile(filePath, dirPath, args.date, args.timeWindow, args.threadCount, args.maxPosts, scrapers)
 
-	if(args.city != "no"):
-		scrapeCityToFile(args.dirPrefix, args.city, scrapers[0])
+		if(args.city != "no"):
+			scrapeCityToFile(args.dirPrefix, args.city, scrapers[0])
 
-	if(args.location != "no"):
-		scrapeLocationToFile(args.dirPrefix, args.location, args.date, args.timeWindow, args.maxPosts, scrapers[0])
+		if(args.location != "no"):
+			scrapeLocationToFile(args.dirPrefix, args.location, args.date, args.timeWindow, args.maxPosts, scrapers[0])
 
-	end = datetime.now()
-	print ("scraping time: " + str(end - start))
+		end = datetime.now()
+		print ("scraping time: " + str(end - start))
 
-	if(len(scrapers) > 0):
-		for s in scrapers:
-			s.quit()
+	except KeyboardInterrupt:
+		pass
+	finally:
+		if(len(scrapers) > 0): #for some reason does not work with keyboardInterrupt
+			for s in scrapers:
+				s.quit()
 
 main()
