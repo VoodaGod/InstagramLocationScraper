@@ -193,7 +193,6 @@ class LocationScraper(object):
 			try:
 				dateElement = WebDriverWait(self.driver, MAX_WAIT).until(EC.presence_of_element_located(LOC_DATE))
 			except TimeoutException:
-				print("couldn't locate date element at " + self.driver.title + " @ " + self.driver.current_url)
 				continue
 			date = dateutil.parser.parse(dateElement.get_attribute("datetime"), ignoretz=True)
 			self.clickElement(locator=LOC_CLOSE_BUTTON)
@@ -216,7 +215,6 @@ class LocationScraper(object):
 			try:
 				dateElement = WebDriverWait(self.driver, MAX_WAIT).until(EC.presence_of_element_located(LOC_DATE))
 			except TimeoutException:
-				print("couldn't locate date element at " + self.driver.title + " @ " + self.driver.current_url)
 				continue
 			date = dateutil.parser.parse(dateElement.get_attribute("datetime"), ignoretz=True)
 			self.clickElement(locator=LOC_CLOSE_BUTTON)

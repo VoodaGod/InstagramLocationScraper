@@ -1,24 +1,32 @@
-python LocationCrawler.py -fromDir ./data/24hCrawl1/ _Top5.txt -t 1 -threads 3 -max 1000 -d 2017-06-09T01:00:00
-python LocationCrawler.py -fromDir ./data/24hCrawl1/ _Top5.txt -t 1 -threads 3 -max 1000 -d 2017-06-09T02:00:00
-python LocationCrawler.py -fromDir ./data/24hCrawl1/ _Top5.txt -t 1 -threads 3 -max 1000 -d 2017-06-09T03:00:00
-python LocationCrawler.py -fromDir ./data/24hCrawl1/ _Top5.txt -t 1 -threads 3 -max 1000 -d 2017-06-09T04:00:00
-python LocationCrawler.py -fromDir ./data/24hCrawl1/ _Top5.txt -t 1 -threads 3 -max 1000 -d 2017-06-09T05:00:00
-python LocationCrawler.py -fromDir ./data/24hCrawl1/ _Top5.txt -t 1 -threads 3 -max 1000 -d 2017-06-09T06:00:00
-python LocationCrawler.py -fromDir ./data/24hCrawl1/ _Top5.txt -t 1 -threads 3 -max 1000 -d 2017-06-09T07:00:00
-python LocationCrawler.py -fromDir ./data/24hCrawl1/ _Top5.txt -t 1 -threads 3 -max 1000 -d 2017-06-09T08:00:00
-python LocationCrawler.py -fromDir ./data/24hCrawl1/ _Top5.txt -t 1 -threads 3 -max 1000 -d 2017-06-09T09:00:00
-python LocationCrawler.py -fromDir ./data/24hCrawl1/ _Top5.txt -t 1 -threads 3 -max 1000 -d 2017-06-09T10:00:00
-python LocationCrawler.py -fromDir ./data/24hCrawl1/ _Top5.txt -t 1 -threads 3 -max 1000 -d 2017-06-09T11:00:00
-python LocationCrawler.py -fromDir ./data/24hCrawl1/ _Top5.txt -t 1 -threads 3 -max 1000 -d 2017-06-09T12:00:00
-python LocationCrawler.py -fromDir ./data/24hCrawl1/ _Top5.txt -t 1 -threads 3 -max 1000 -d 2017-06-09T13:00:00
-python LocationCrawler.py -fromDir ./data/24hCrawl1/ _Top5.txt -t 1 -threads 3 -max 1000 -d 2017-06-09T14:00:00
-python LocationCrawler.py -fromDir ./data/24hCrawl1/ _Top5.txt -t 1 -threads 3 -max 1000 -d 2017-06-09T15:00:00
-python LocationCrawler.py -fromDir ./data/24hCrawl1/ _Top5.txt -t 1 -threads 3 -max 1000 -d 2017-06-09T16:00:00
-python LocationCrawler.py -fromDir ./data/24hCrawl1/ _Top5.txt -t 1 -threads 3 -max 1000 -d 2017-06-09T17:00:00
-python LocationCrawler.py -fromDir ./data/24hCrawl1/ _Top5.txt -t 1 -threads 3 -max 1000 -d 2017-06-09T18:00:00
-python LocationCrawler.py -fromDir ./data/24hCrawl1/ _Top5.txt -t 1 -threads 3 -max 1000 -d 2017-06-09T19:00:00
-python LocationCrawler.py -fromDir ./data/24hCrawl1/ _Top5.txt -t 1 -threads 3 -max 1000 -d 2017-06-09T20:00:00
-python LocationCrawler.py -fromDir ./data/24hCrawl1/ _Top5.txt -t 1 -threads 3 -max 1000 -d 2017-06-09T21:00:00
-python LocationCrawler.py -fromDir ./data/24hCrawl1/ _Top5.txt -t 1 -threads 3 -max 1000 -d 2017-06-09T22:00:00
-python LocationCrawler.py -fromDir ./data/24hCrawl1/ _Top5.txt -t 1 -threads 3 -max 1000 -d 2017-06-09T23:00:00
-python LocationCrawler.py -fromDir ./data/24hCrawl1/ _Top5.txt -t 1 -threads 3 -max 1000 -d 2017-06-10T00:00:00
+SET dir=./data/24hCrawl1/
+SET suffix=_Top5.txt
+SET threads=8
+SET max=2000
+SET date=2017-06-10
+
+python LocationCrawler.py -fromDir %dir% %suffix% -t 1 -threads %threads% -max %max% -d %date%T19:00:00
+python LocationCrawler.py -fromDir %dir% %suffix% -t 1 -threads %threads% -max %max% -d %date%T20:00:00
+python LocationCrawler.py -fromDir %dir% %suffix% -t 1 -threads %threads% -max %max% -d %date%T21:00:00
+python LocationCrawler.py -fromDir %dir% %suffix% -t 1 -threads %threads% -max %max% -d %date%T22:00:00
+python LocationCrawler.py -fromDir %dir% %suffix% -t 1 -threads %threads% -max %max% -d %date%T23:00:00
+python LocationCrawler.py -fromDir %dir% %suffix% -t 1 -threads %threads% -max %max% -d %date%T01:00:00
+python LocationCrawler.py -fromDir %dir% %suffix% -t 1 -threads %threads% -max %max% -d %date%T02:00:00
+python LocationCrawler.py -fromDir %dir% %suffix% -t 1 -threads %threads% -max %max% -d %date%T03:00:00
+python LocationCrawler.py -fromDir %dir% %suffix% -t 1 -threads %threads% -max %max% -d %date%T04:00:00
+python LocationCrawler.py -fromDir %dir% %suffix% -t 1 -threads %threads% -max %max% -d %date%T05:00:00
+python LocationCrawler.py -fromDir %dir% %suffix% -t 1 -threads %threads% -max %max% -d %date%T06:00:00
+python LocationCrawler.py -fromDir %dir% %suffix% -t 1 -threads %threads% -max %max% -d %date%T07:00:00
+python LocationCrawler.py -fromDir %dir% %suffix% -t 1 -threads %threads% -max %max% -d %date%T08:00:00
+python LocationCrawler.py -fromDir %dir% %suffix% -t 1 -threads %threads% -max %max% -d %date%T09:00:00
+python LocationCrawler.py -fromDir %dir% %suffix% -t 1 -threads %threads% -max %max% -d %date%T10:00:00
+python LocationCrawler.py -fromDir %dir% %suffix% -t 1 -threads %threads% -max %max% -d %date%T11:00:00
+python LocationCrawler.py -fromDir %dir% %suffix% -t 1 -threads %threads% -max %max% -d %date%T12:00:00
+python LocationCrawler.py -fromDir %dir% %suffix% -t 1 -threads %threads% -max %max% -d %date%T13:00:00
+python LocationCrawler.py -fromDir %dir% %suffix% -t 1 -threads %threads% -max %max% -d %date%T14:00:00
+python LocationCrawler.py -fromDir %dir% %suffix% -t 1 -threads %threads% -max %max% -d %date%T15:00:00
+python LocationCrawler.py -fromDir %dir% %suffix% -t 1 -threads %threads% -max %max% -d %date%T16:00:00
+python LocationCrawler.py -fromDir %dir% %suffix% -t 1 -threads %threads% -max %max% -d %date%T17:00:00
+python LocationCrawler.py -fromDir %dir% %suffix% -t 1 -threads %threads% -max %max% -d %date%T18:00:00
+python LocationCrawler.py -fromDir %dir% %suffix% -t 1 -threads %threads% -max %max% -d %date%T19:00:00
+python LocationCrawler.py -fromDir %dir% %suffix% -t 1 -threads %threads% -max %max% -d %date%T20:00:00
+python LocationCrawler.py -fromDir %dir% %suffix% -t 1 -threads %threads% -max %max% -d %date%T21:00:00
