@@ -1,6 +1,6 @@
 
-# LocationCrawler
-A non API python program to scrape number of posts at a location, as well as locations in a city
+# Instagram Location Crawler
+A non API python program to scrape number of posts at a location, as well as locations in a city from Instagram  
 I am coding this for use in my Seminar "Computational Social Sciences" to acquire data for my group
 ### Full usage:
 ```
@@ -42,7 +42,7 @@ optional arguments:
 ```
 
 ### Installation
-download chromedriver here: https://sites.google.com/a/chromium.org/chromedriver/
+download chromedriver here: https://sites.google.com/a/chromium.org/chromedriver/  
 put the executable into the same directory as instagramcrawler.py and rename it to chromedriverWIN or chromedriverMAC depending on your version
 
 ```
