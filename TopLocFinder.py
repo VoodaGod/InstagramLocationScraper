@@ -1,29 +1,32 @@
 import os
 import sys
 
+''' Script to find top N locations from files in folders, both ending with "_Postcounts", in DIR
+	Usage: TopLocFinder.py DIR N   eg. TopLocFinder.py ./data/ 10'''
 
 def main():
 	locDict = {}
 	numTop = int(sys.argv[2])
 	for root, subDirs, __ in os.walk(sys.argv[1]):
 		for subDir in subDirs:
-			if(not subDir.endswith("_Postcounts")):
+			if(not subDir.endswith("_Postcounts")): #for each dir ending in "_Postcounts"
 				continue
 			print(subDir)
 			for subRoot, __, subFiles in os.walk(os.path.join(root, subDir)):
 				for subFile in subFiles:
-					for line in getLinesInFile(os.path.join(subRoot, subFile)):
-						count = line.split("\t")[-1]
-						locDict[subFile.replace("Postcounts.txt", "")] =  count
-				break
-			sortedLocs = sorted(locDict.items(), key=lambda x: int(x[1]), reverse=True)
+					if(not subFile.endswith("Postcounts.txt")): #for each file ending in "_Postcounts.txt"
+						continue
+					count = 0
+					for line in getLinesInFile(os.path.join(subRoot, subFile)): #add number of posts in each timestamp
+						count += int(line.split("\t")[-1])
+					locDict[subFile.replace("Postcounts.txt", "")] =  count #store location & sum of postcounts
+			sortedLocs = sorted(locDict.items(), key=lambda x: x[1], reverse=True) #sort by postcount, descending
 			topFile = open((os.path.join(root, subDir).replace("_Postcounts", "_Top") + str(numTop) + ".txt"), "w")
 			topLocs = []
-			for i in range(min(len(sortedLocs), numTop)):
+			for i in range(min(len(sortedLocs), numTop)): #write top locations to file "CITY_TopN.txt"
 				topLocs.append(sortedLocs[i][0].replace("_", "/") + "\n")
 			topFile.writelines(topLocs)
 			locDict.clear()
-		break
 
 
 def getLinesInFile(filePath):
