@@ -149,10 +149,12 @@ class LocationScraper(object):
 			try:
 				if(el == None):
 					return False
-				webdriver.ActionChains(self.driver).send_keys_to_element(el, Keys.ENTER).perform()
+				actions = webdriver.ActionChains(self.driver).send_keys_to_element(el, Keys.ENTER)
+				actions.move_to_element(el)
+				actions.perform()
 				time.sleep(waitAfterClick)
 				return True
-			except StaleElementReferenceException: #element not on current page
+			except (StaleElementReferenceException, WebDriverException): #element not on current page
 				raise
 
 
@@ -206,7 +208,7 @@ class LocationScraper(object):
 			middle = int((left + right) / 2)
 			try:
 				self.clickElement(element=postList[middle])
-			except StaleElementReferenceException: #post not on current page
+			except (StaleElementReferenceException, WebDriverException): #post not on current page
 				if(not self.clickElement(locator=LOC_CLOSE_BUTTON)):
 					#postList = self.driver.find_elements_by_class_name(CLASS_POST)
 					if(self.driver.title == "Page Not Found • Instagram"):

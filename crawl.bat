@@ -1,15 +1,9 @@
 SET dir=./data/24hCrawl1/
 SET suffix=_Top5.txt
-SET threads=8
+SET threads=6
 SET max=2000
-SET date=2017-06-10
+SET date=2017-06-11
 
-python LocationCrawler.py -fromDir %dir% %suffix% -t 1 -threads %threads% -max %max% -d %date%T19:00:00
-python LocationCrawler.py -fromDir %dir% %suffix% -t 1 -threads %threads% -max %max% -d %date%T20:00:00
-python LocationCrawler.py -fromDir %dir% %suffix% -t 1 -threads %threads% -max %max% -d %date%T21:00:00
-python LocationCrawler.py -fromDir %dir% %suffix% -t 1 -threads %threads% -max %max% -d %date%T22:00:00
-python LocationCrawler.py -fromDir %dir% %suffix% -t 1 -threads %threads% -max %max% -d %date%T23:00:00
-python LocationCrawler.py -fromDir %dir% %suffix% -t 1 -threads %threads% -max %max% -d %date%T01:00:00
 python LocationCrawler.py -fromDir %dir% %suffix% -t 1 -threads %threads% -max %max% -d %date%T02:00:00
 python LocationCrawler.py -fromDir %dir% %suffix% -t 1 -threads %threads% -max %max% -d %date%T03:00:00
 python LocationCrawler.py -fromDir %dir% %suffix% -t 1 -threads %threads% -max %max% -d %date%T04:00:00
@@ -30,3 +24,11 @@ python LocationCrawler.py -fromDir %dir% %suffix% -t 1 -threads %threads% -max %
 python LocationCrawler.py -fromDir %dir% %suffix% -t 1 -threads %threads% -max %max% -d %date%T19:00:00
 python LocationCrawler.py -fromDir %dir% %suffix% -t 1 -threads %threads% -max %max% -d %date%T20:00:00
 python LocationCrawler.py -fromDir %dir% %suffix% -t 1 -threads %threads% -max %max% -d %date%T21:00:00
+python LocationCrawler.py -fromDir %dir% %suffix% -t 1 -threads %threads% -max %max% -d %date%T19:00:00
+python LocationCrawler.py -fromDir %dir% %suffix% -t 1 -threads %threads% -max %max% -d %date%T20:00:00
+python LocationCrawler.py -fromDir %dir% %suffix% -t 1 -threads %threads% -max %max% -d %date%T21:00:00
+python LocationCrawler.py -fromDir %dir% %suffix% -t 1 -threads %threads% -max %max% -d %date%T22:00:00
+python LocationCrawler.py -fromDir %dir% %suffix% -t 1 -threads %threads% -max %max% -d %date%T23:00:00
+SET date=2017-06-12
+python LocationCrawler.py -fromDir %dir% %suffix% -t 1 -threads %threads% -max %max% -d %date%T00:00:00
+python LocationCrawler.py -fromDir %dir% %suffix% -t 1 -threads %threads% -max %max% -d %date%T01:00:00
