@@ -42,8 +42,8 @@ optional arguments:
 ```
 
 ### Installation
-download chromedriver here: https://sites.google.com/a/chromium.org/chromedriver/  
-put the executable into the same directory as instagramcrawler.py and rename it to chromedriverWIN or chromedriverMAC depending on your version
+download chromedriver here: https://sites.google.com/a/chromium.org/chromedriver/
+either edit CHROMEDRIVER_PATH in LocationCrawler.py or pass it as an argument with -drv (eg: "-drv ./chromedriver.exe")
 
 ```
 $ pip install -r requirements.txt
