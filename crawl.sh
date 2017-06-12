@@ -1,13 +1,13 @@
 driverPath='./chromedriver.exe'
 driverProfilePathPrefix='./Scraper'
 folder='./data/24hCrawl1/'
-suffix='_Top1.txt'
+suffix='_Top5.txt'
 threads=6
 max=2000
 curday='2017-06-12'
 nextday='2017-06-13'
 nextnextday='2017-06-14'
-start=12
+start=15
 
 for i in {0..47};
 do

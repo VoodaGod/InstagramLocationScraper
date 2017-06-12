@@ -422,10 +422,11 @@ def main():
 	scrapers = []
 	try:
  		#wait until dateTo reached
-		dateTo = dateutil.parser.parse(args.date)
-		print("waiting until " + dateTo.isoformat())
-		while(dateTo > datetime.utcnow()):
-			time.sleep(1)
+		if(args.date != "now"):
+			dateTo = dateutil.parser.parse(args.date)
+			print("waiting until " + dateTo.isoformat())
+			while(dateTo > datetime.utcnow()):
+				time.sleep(1)
 
 		threads = []
 		#start scrapers concurrently

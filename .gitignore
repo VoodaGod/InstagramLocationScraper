@@ -4,3 +4,4 @@ data
 Scraper*
 *.log
 .vscode
+chromedriver*
