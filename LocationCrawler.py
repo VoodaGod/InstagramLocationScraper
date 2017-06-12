@@ -57,7 +57,7 @@ class LocationScraper(object):
 			traceback.print_exc()
 
 		self.inUse = False #if False, is ready to handle new job
-		self.BannerClosed = False
+		self.BannerClosed = False #email banner only needs to be closed on first load
 
 	def quit(self):
 		"""quit the driver"""
@@ -421,6 +421,12 @@ def main():
 
 	scrapers = []
 	try:
+ 		#wait until dateTo reached
+		dateTo = dateutil.parser.parse(args.date)
+		print("waiting until " + dateTo.isoformat())
+		while(dateTo > datetime.utcnow()):
+			time.sleep(1)
+
 		threads = []
 		#start scrapers concurrently
 		for i in range(args.threadCount):
@@ -430,12 +436,6 @@ def main():
 		#wait for all scrapers to finish starting
 		for t in threads:
 			t.join()
-
- 		#wait until dateTo reached
-		dateTo = dateutil.parser.parse(args.date)
-		print("waiting until " + dateTo.isoformat())
-		while(dateTo > datetime.utcnow()):
-			time.sleep(1)
 
 		#for printing duration of scraping
 		start = datetime.now()
