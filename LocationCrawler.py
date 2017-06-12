@@ -17,7 +17,6 @@ import threading
 # URLS
 HOST = "https://www.instagram.com"
 RELATIVE_URL_LOCATION = "/explore/locations/"
-DEFAULT_URL = "about:blank"
 
 #Element locators
 #LOC_LOAD_MORE = (By.CSS_SELECTOR, "a._8imhp._glz1g") #clicking on last post automatically loads more
@@ -69,7 +68,9 @@ class LocationScraper(object):
 	def scrapeLocation(self, location, dateTo, dateFrom, maxPosts):
 		"""return number of posts at location since dateFrom till dateTo, scrolling at most to maxPosts"""
 		attempts = 0
-		while (attempts < 3): #have to restart scrape if clicked on deleted post
+		while(attempts < 3): #have to restart scrape if clicked on deleted post
+			if(attempts > 0):
+				print("\nrestarting scrape of " + location + ", attempt " + str(attempts) + "\n")
 			try:
 				self.browseLocationPage(location)
 				if(not self.BannerClosed): #only need to close banner once
@@ -90,7 +91,6 @@ class LocationScraper(object):
 				else:
 					return (firstPostIndex - lastPostIndex)
 			except self.PageNotFoundException:
-				print("\nrestarting scrape of " + location + ", attempt " + str(attempts + 1) + "\n")
 				attempts += 1
 
 
@@ -113,6 +113,9 @@ class LocationScraper(object):
 		"""browses a page with partial url relative to location url"""
 		targetURL = HOST + RELATIVE_URL_LOCATION + location
 		self.driver.get(targetURL)
+		while(self.driver.current_url != targetURL):
+			print("retry getting " + targetURL)
+			time.sleep(0.1)
 
 	def clickElement(self, locator=(), element=None):
 		"""returns True if successfully clicked an element by locator or reference,
@@ -324,7 +327,7 @@ def scrapeCitiesFromList(cityList, dirPrefix, threadCount, scrapers):
 					threads[-1].start()
 					i += 1
 					break
-		time.sleep(0.5)
+		time.sleep(1)
 
 	for t in threads:
 		t.join()
@@ -379,7 +382,6 @@ class ScrapeThread(threading.Thread):
 	def run(self):
 		try:
 			self.target(*self.args)
-			self.scraper.driver.get("about:blank")
 		except KeyboardInterrupt:
 			pass
 		except:
