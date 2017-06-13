@@ -38,6 +38,8 @@ CHROME_PROFILE_PATH = "./Scraper"
 CHROMEDRIVER_PATH = "./chromedriver.exe"
 
 MAX_WAIT = 7
+TIMEOUT_MINUTES = 20
+ERROR_INDICATOR = -9999
 
 class LocationScraper(object):
 	def __init__(self, profilePath, driverPath):
@@ -56,7 +58,8 @@ class LocationScraper(object):
 			traceback.print_exc()
 
 		self.inUse = False #if False, is ready to handle new job
-		self.BannerClosed = False #email banner only needs to be closed on first load
+		self.bannerClosed = False #email banner only needs to be closed on first load
+		self.timeLimit  = datetime.now() + timedelta(minutes=TIMEOUT_MINUTES)
 
 	def quit(self):
 		"""quit the driver"""
@@ -67,25 +70,26 @@ class LocationScraper(object):
 
 	def scrapeLocation(self, location, dateTo, dateFrom, maxPosts):
 		"""return number of posts at location since dateFrom till dateTo, scrolling at most to maxPosts"""
+		self.timeLimit = datetime.now() + timedelta(minutes=TIMEOUT_MINUTES)
 		attempts = 0
 		while(attempts < 3): #have to restart scrape if clicked on deleted post
 			if(attempts > 0):
 				print("\nrestarting scrape of " + location + ", attempt " + str(attempts) + "\n")
 			try:
 				self.browseLocationPage(location)
-				if(not self.BannerClosed): #only need to close banner once
-					try:
-						self.clickElement(locator=LOC_EMAIL_BANNER)
-					except StaleElementReferenceException:
-						pass
-					finally:
-						self.BannerClosed = True
+				if(not self.bannerClosed): #only need to close banner once
+					self.clickElement(locator=LOC_EMAIL_BANNER)
+					self.bannerClosed = True
 
-				postList = self.scrollToDate(dateFrom, maxPosts)
-				if(len(postList) <= 9): #no recent posts, only "top posts" or none
-					return 0
-				firstPostIndex = self.findFirstPost(dateFrom, postList)
-				lastPostIndex = self.findLastPost(dateTo, postList, firstPostIndex)
+				try:
+					postList = self.scrollToDate(dateFrom, maxPosts)
+					if(len(postList) <= 9): #no recent posts, only "top posts" or none
+						return 0
+					firstPostIndex = self.findFirstPost(dateFrom, postList)
+					lastPostIndex = self.findLastPost(dateTo, postList, firstPostIndex)
+				except TimeoutException:
+					print("scraper " + location + " timed out")
+					return ERROR_INDICATOR
 				if(len(postList) == (maxPosts + 9)): #didn't finish scrolling
 					return -(firstPostIndex - lastPostIndex) #negative = more than
 				else:
@@ -99,7 +103,7 @@ class LocationScraper(object):
 		self.browseLocationPage(city)
 		while(True):
 			self.driver.execute_script(SCROLL_DOWN)
-			time.sleep(0.1)
+			time.sleep(0.2)
 			if(not self.clickElement(locator=LOC_SEE_MORE)):
 				break
 			time.sleep(1) #seems to get duplicate elements when looping too fast
@@ -115,12 +119,12 @@ class LocationScraper(object):
 		self.driver.get(targetURL)
 		while(self.driver.current_url != targetURL):
 			print("retry getting " + targetURL)
-			time.sleep(0.1)
+			time.sleep(0.5)
+			self.driver.get(targetURL)
 
 	def clickElement(self, locator=(), element=None):
-		"""returns True if successfully clicked an element by locator or reference,
-		raises StaleElementReferenceException if element not currently located on page"""
-		waitAfterClick = 0.1
+		"""returns True if successfully clicked an element by locator or reference"""
+		waitAfterClick = 0.2
 		el = None
 		try: #click normally
 			if(locator != ()): #by locator
@@ -137,16 +141,15 @@ class LocationScraper(object):
 					try:#check if element is on current page
 						WebDriverWait(self.driver, MAX_WAIT).until_not(EC.staleness_of(element))
 					except TimeoutException: #if it's not
-						raise StaleElementReferenceException
+						return False
 					el.click() #raises WebDriverException if element not clickable
 					time.sleep(waitAfterClick)
 					return True
-				except (StaleElementReferenceException, WebDriverException): #handle below
+				except StaleElementReferenceException:
+					return False
+				except WebDriverException: #handle below
 					raise
 			return False #nothing to click
-
-		except StaleElementReferenceException: #handle outside
-			raise
 
 		except WebDriverException: #element wasn't clickable, try sending enter instead
 			try:
@@ -158,7 +161,7 @@ class LocationScraper(object):
 				time.sleep(waitAfterClick)
 				return True
 			except (StaleElementReferenceException, WebDriverException): #element not on current page
-				raise
+				return False
 
 
 	def scrollToDate(self, dateFrom, maxPosts):
@@ -166,7 +169,7 @@ class LocationScraper(object):
 		self.driver.execute_script(SCROLL_DOWN)
 		prevLength = 0
 		scrollCounter = 0
-		while(True):
+		while(datetime.now() < self.timeLimit):
 			postList = self.driver.find_elements_by_class_name(CLASS_POST)
 			if(len(postList) < 9):
 				return [] #no recent posts, only "top posts" or none
@@ -188,9 +191,7 @@ class LocationScraper(object):
 					return postList
 
 			#check if last post is older than dateFrom, then return postList
-			try: #click on last post
-				self.clickElement(element=postList[-1])
-			except StaleElementReferenceException: #post not on current page
+			if(not self.clickElement(element=postList[-1])):
 				if(not self.clickElement(locator=LOC_CLOSE_BUTTON)):
 					if(self.driver.title == "Page Not Found • Instagram"):
 						raise self.PageNotFoundException #post was deleted
@@ -205,15 +206,15 @@ class LocationScraper(object):
 				return postList
 			self.driver.execute_script(SCROLL_DOWN)
 
+		print("scrolling timed out at: " + self.driver.current_url)
+		raise TimeoutException
+
 	def binaryDateSearch(self, dateCmp, postList, left, right):
 		"""return index for dateCmp in postList between left & right"""
-		while(True):
+		while(datetime.now() < self.timeLimit):
 			middle = int((left + right) / 2)
-			try:
-				self.clickElement(element=postList[middle])
-			except (StaleElementReferenceException, WebDriverException): #post not on current page
+			if(not self.clickElement(element=postList[middle])):
 				if(not self.clickElement(locator=LOC_CLOSE_BUTTON)):
-					#postList = self.driver.find_elements_by_class_name(CLASS_POST)
 					if(self.driver.title == "Page Not Found • Instagram"):
 						raise self.PageNotFoundException
 				continue #clicked close button, try clicking post again
@@ -231,6 +232,9 @@ class LocationScraper(object):
 				right = middle - 1
 			if(right < left): #not sure why return left seems to work
 				return left
+
+		print("search timed out at: " + self.driver.current_url)
+		raise TimeoutException
 
 	def findFirstPost(self, dateFrom, postList):
 		"""returns index of first post in postList after dateFrom"""
@@ -382,6 +386,7 @@ class ScrapeThread(threading.Thread):
 	def run(self):
 		try:
 			self.target(*self.args)
+			self.scraper.driver.get("about:blank")
 		except KeyboardInterrupt:
 			pass
 		except:
@@ -466,7 +471,7 @@ def main():
 			scrapeLocationToFile(args.dirPrefix, args.location, args.date, args.timeWindow, args.maxPosts, scrapers[0])
 
 		end = datetime.now()
-		print ("scraping time: " + str(end - start))
+		print ("scraping time: " + str(end - start) + "\n")
 
 	except KeyboardInterrupt:
 		pass
