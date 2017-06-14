@@ -77,10 +77,6 @@ class LocationScraper(object):
 				print("\nrestarting scrape of " + location + ", attempt " + str(attempts) + "\n")
 			try:
 				self.browseLocationPage(location)
-				if(not self.bannerClosed): #only need to close banner once
-					self.clickElement(locator=LOC_EMAIL_BANNER)
-					self.bannerClosed = True
-
 				try:
 					postList = self.scrollToDate(dateFrom, maxPosts)
 					if(len(postList) <= 9): #no recent posts, only "top posts" or none
@@ -170,6 +166,9 @@ class LocationScraper(object):
 		prevLength = 0
 		scrollCounter = 0
 		while(datetime.now() < self.timeLimit):
+			if(not self.bannerClosed): #only need to close banner once
+				self.bannerClosed = self.clickElement(locator=LOC_EMAIL_BANNER)
+
 			postList = self.driver.find_elements_by_class_name(CLASS_POST)
 			if(len(postList) < 9):
 				return [] #no recent posts, only "top posts" or none
