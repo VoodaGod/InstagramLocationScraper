@@ -7,12 +7,14 @@ import sys
 def main():
 	locDict = {}
 	numTop = int(sys.argv[2])
-	for root, subDirs, __ in os.walk(sys.argv[1]):
+	root = sys.argv[1]
+	for __, subDirs, __ in os.walk(root): #get subDirs
 		for subDir in subDirs:
 			if(not subDir.endswith("_Postcounts")): #for each dir ending in "_Postcounts"
 				continue
 			print(subDir)
-			for subRoot, __, subFiles in os.walk(os.path.join(root, subDir)):
+			subRoot = os.path.join(root, subDir)
+			for __, __, subFiles in os.walk(subRoot): #get subFiles
 				for subFile in subFiles:
 					if(not subFile.endswith("Postcounts.txt")): #for each file ending in "_Postcounts.txt"
 						continue
@@ -21,11 +23,12 @@ def main():
 						count += int(line.split("\t")[-1])
 					locDict[subFile.replace("Postcounts.txt", "")] =  count #store location & sum of postcounts
 			sortedLocs = sorted(locDict.items(), key=lambda x: x[1], reverse=True) #sort by postcount, descending
-			topFile = open((os.path.join(root, subDir).replace("_Postcounts", "_Top") + str(numTop) + ".txt"), "w")
+			topFile = open((subRoot.replace("_Postcounts", "_Top") + str(numTop) + ".txt"), "w")
 			topLocs = []
 			for i in range(min(len(sortedLocs), numTop)): #write top locations to file "CITY_TopN.txt"
 				topLocs.append(sortedLocs[i][0].replace("_", "/") + "\n")
 			topFile.writelines(topLocs)
+			topFile.close()
 			locDict.clear()
 
 
