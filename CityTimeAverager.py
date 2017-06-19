@@ -27,11 +27,12 @@ def main():
 							if(str(i).zfill(2) + ":00:00") in line:
 								count = int(line.split("\t")[1])
 								if(count != ERROR_INDICATOR):
-									counts.append(count) #add count at hour in current line to counts
+									counts.append(abs(count)) #add count at hour in current line to counts
 						#remove outliers & add average
 						counts.remove(min(counts))
 						counts.remove(max(counts))
 						averageList[i] += sum(counts) / len(counts)
+				break
 			#write to file
 			avgCountFile = open(subRoot.replace("Postcounts", "AvgCounts.txt"), "w")
 			lines = []
@@ -39,6 +40,7 @@ def main():
 				lines.append(str(i).zfill(2) + ":00:00\t" + str(round(averageList[i], 2)) + "\n")
 			avgCountFile.writelines(lines)
 			avgCountFile.close()
+		break
 
 
 

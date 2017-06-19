@@ -29,6 +29,7 @@ def main():
 			for i in range(24):
 				fixedFile.write(str(i).zfill(2) + ":00:00\t" + counts[i] + "\n")
 			fixedFile.close()
+		break
 
 
 
