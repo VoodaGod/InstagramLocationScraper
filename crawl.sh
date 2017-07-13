@@ -4,11 +4,11 @@ folder='./data/24hCrawl1/'
 suffix='_Top5.txt'
 threads=6
 max=2000
-curday='2017-06-16'
-nextday='2017-06-17'
-nextnextday='2017-06-18'
-nextnextnextday='2017-06-19'
-start=20
+curday='2017-06-17'
+nextday='2017-06-18'
+nextnextday='2017-06-19'
+nextnextnextday='2017-06-20'
+start=13
 
 for i in {0..71};
 do

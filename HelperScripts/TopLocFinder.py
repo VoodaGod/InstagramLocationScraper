@@ -22,6 +22,7 @@ def main():
 					for line in getLinesInFile(os.path.join(subRoot, subFile)): #add number of posts in each timestamp
 						count += int(line.split("\t")[-1])
 					locDict[subFile.replace("Postcounts.txt", "")] =  count #store location & sum of postcounts
+				break
 			sortedLocs = sorted(locDict.items(), key=lambda x: x[1], reverse=True) #sort by postcount, descending
 			topFile = open((subRoot.replace("_Postcounts", "_Top") + str(numTop) + ".txt"), "w")
 			topLocs = []
@@ -30,6 +31,7 @@ def main():
 			topFile.writelines(topLocs)
 			topFile.close()
 			locDict.clear()
+		break
 
 
 def getLinesInFile(filePath):
