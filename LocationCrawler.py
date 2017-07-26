@@ -52,10 +52,10 @@ class LocationScraper(object):
 
 		try:
 			self.driver = webdriver.Chrome(executable_path=driverPath, chrome_options=options)
-		except:
+		except WebDriverException:
 			print("failed to start driver at " + driverPath)
 			self.inUse = True #scraper with no driver is not ready to handle new job
-			traceback.print_exc()
+			#traceback.print_exc()
 
 		self.inUse = False #if False, is ready to handle new job
 		self.bannerClosed = False #email banner only needs to be closed on first load
@@ -410,17 +410,17 @@ class ScraperStarterThread(threading.Thread):
 def main():
 	#   Arguments  #
 	parser = argparse.ArgumentParser(description="Instagram Location Scraper")
-	parser.add_argument("-l", "--location", type=str, default="no", help="Location Number to scrape, eg. 214335386/ for Englischer Garten")
-	parser.add_argument("-c", "--city", type=str, default="no", help="City to scrape location links from, eg. c579270/ for Munich")
-	parser.add_argument("-fromFile", default=("no", "no"), nargs=2, metavar=("FILE", "TYPE"), help="File containing a list of locations/cities to scrape, specify with c or l, eg. -list cities.txt c")
-	parser.add_argument("-fromDir", type=str, default=("no", "no"), nargs=2, metavar=("DIR", "SUFFIX"), help="Directory containing files with lists of locations to scrape with suffix to specify which files to scrape, eg. -lDir ./data/Locations _Locations.txt")
-	parser.add_argument("-d", "--date", type=str, default="now", help="Date up till which to scrape, eg. 2017-06-01T10:00:00")
-	parser.add_argument("-t", "--timeWindow", type=float, default=1.0, help="Timeframe to check number of posts in hours, eg. 1.0")
-	parser.add_argument("-dir", "--dirPrefix", type=str, default="./data/", help="directory to save results to, default: ./data/")
-	parser.add_argument("-threads", "--threadCount", type=int, default=1, help="how many threads to use")
-	parser.add_argument("-max", "--maxPosts", type=int, default=-1, help="maximum number of posts to scrape, eg. due to performance reasons")
-	parser.add_argument("-drv", "--driverPath", type=str, default=CHROMEDRIVER_PATH, help=("path to chromedriver, default = " + CHROMEDRIVER_PATH))
-	parser.add_argument("-drvProfile", "--driverProfilePrefix", type=str, default=CHROME_PROFILE_PATH, help="prefix for scraper chrome profiles, default = " + CHROME_PROFILE_PATH)
+	parser.add_argument("-l", "--location", type=str, default="no", help="Location Number to scrape, eg. -l 214335386/ for Englischer Garten")
+	parser.add_argument("-c", "--city", type=str, default="no", help="City to scrape location links from, eg. -c c579270/ for Munich")
+	parser.add_argument("-fromFile", default=("no", "no"), nargs=2, metavar=("FILE", "TYPE"), help="File containing a list of locations/cities to scrape, specify with c or l, eg. -fromFile cities.txt c")
+	parser.add_argument("-fromDir", type=str, default=("no", "no"), nargs=2, metavar=("DIR", "SUFFIX"), help="Directory containing files with lists of locations to scrape with suffix to specify which files to scrape, eg. -fromDir ./data/Locations _Locations.txt")
+	parser.add_argument("-d", "--date", type=str, default="now", help="Date up till which to scrape, eg. -d 2017-06-01T10:00:00 ; default: now")
+	parser.add_argument("-t", "--timeWindow", type=float, default=1.0, help="Timeframe to check number of posts in hours, eg. -t 1.0 ; default: 1.0")
+	parser.add_argument("-dir", "--dirPrefix", type=str, default="./data/", help="directory to save results to, eg. -dir ./data/ ; default: ./data/")
+	parser.add_argument("-threads", "--threadCount", type=int, default=1, help="how many threads (each one instance of chromedriver) to use, eg. -threads 4 ; default: 1")
+	parser.add_argument("-max", "--maxPosts", type=int, default=-1, help="maximum number of posts to scrape, mainly due to performance reasons, eg. -max 1500 ; default: -1 (unlimited)")
+	parser.add_argument("-drv", "--driverPath", type=str, default=CHROMEDRIVER_PATH, help=("path to chromedriver, eg. -drv ./chromedriver.exe ; default: " + CHROMEDRIVER_PATH))
+	parser.add_argument("-drvProfile", "--driverProfilePrefix", type=str, default=CHROME_PROFILE_PATH, help="prefix for scraper chrome profiles, eg -drvProfile ./Scraper ; default: " + CHROME_PROFILE_PATH)
 
 	args = parser.parse_args()
 	#  End Argparse #
@@ -462,6 +462,8 @@ def main():
 				cityName = filePath.split("/")[-1].replace("_Locations.txt", "") #folder with city name
 				dirPath = args.dirPrefix + cityName + "/"
 				scrapeLocationsFromFile(filePath, dirPath, args.date, args.timeWindow, args.threadCount, args.maxPosts, scrapers)
+			else:
+				print("-fromFile needs type l or c")
 
 		if(args.city != "no"):
 			scrapeCityToFile(args.dirPrefix, args.city, scrapers[0])
@@ -477,6 +479,8 @@ def main():
 	finally:
 		if(len(scrapers) > 0): #for some reason does not work with keyboardInterrupt
 			for s in scrapers:
-				s.quit()
-
+				try:
+					s.quit()
+				except AttributeError:
+					pass
 main()
