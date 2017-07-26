@@ -51,7 +51,7 @@ optional arguments:
 download chromedriver here: https://sites.google.com/a/chromium.org/chromedriver/
 either place chromedriver.exe in same directory as LocationCrawler.py, edit CHROMEDRIVER_PATH in LocationCrawler.py, or pass it as an argument with -drv (eg: "-drv ./chromedriver.exe")
 
-then install the requirements:
+then install the requirements (you need to have a python 3 distribution installed):
 ```
 $ pip install -r requirements.txt
 ```
